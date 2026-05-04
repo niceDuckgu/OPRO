@@ -1,0 +1,24 @@
+--- a/modules/layers.py
++++ b/modules/layers.py
+@@ -378,6 +378,29 @@ def attention_forward(self, x, *, txt_seq_len=0, **kwargs):
+     q = apply_rope(q, freqs)
+     k = apply_rope(k, freqs)
+
++    # ---- OPRO: panel-relative orthogonal modulation -----------------------
++    opro_kwargs = kwargs.get("opro_kwargs", {})
++    opro_module = opro_kwargs.get("opro_module")
++    panel_ids   = opro_kwargs.get("panel_ids")
++    img_start   = opro_kwargs.get("img_start", txt_seq_len)
++    if opro_module is not None and panel_ids is not None:
++        img_end = img_start + panel_ids.shape[1]
++        if img_end <= q.shape[2]:
++            q_img = q[:, :, img_start:img_end, :]
++            k_img = k[:, :, img_start:img_end, :]
++            q_img, k_img = opro_module.apply_to_qk(q_img, k_img, panel_ids)
++            q = q.clone(); k = k.clone()
++            q[:, :, img_start:img_end, :] = q_img
++            k[:, :, img_start:img_end, :] = k_img
++    # ----------------------------------------------------------------------
++
+     attn = scaled_dot_product_attention(q, k, v, ...)
+     return attn

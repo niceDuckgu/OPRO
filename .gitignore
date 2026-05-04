@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Outputs / checkpoints
+output/
+ckpts/
+*.pt
+*.pth
+*.safetensors
+wandb/
+
+# Internal-only — not for the public repo
+CKPT_PATHS.md
+tests/
+.github/workflows/ci.yml
+scripts/run_tests.sh
+scripts/inference_with_production_ckpt.py

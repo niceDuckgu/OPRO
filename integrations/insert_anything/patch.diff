@@ -1,0 +1,44 @@
+--- a/src/models/transformer.py
++++ b/src/models/transformer.py
+@@ -198,6 +198,15 @@ def tranformer_forward(self, hidden_states, encoder_hidden_states, ...):
+     img_ids = build_img_ids(hidden_states.shape[0], H_lat, W_lat, device)
++
++    # Wire OPRO context: panel labels + manager into model_config so block.py reads it.
++    opro_modules = getattr(self, "opro_modules", None)
++    if opro_modules is not None:
++        from opro import compute_panel_ids
++        panel_ids = compute_panel_ids(img_ids, panel_rows=self.opro_config.panel_rows,
++                                      panel_cols=self.opro_config.panel_cols)
++        model_config["_opro_ctx"] = {"manager": opro_modules, "img_panel_ids": panel_ids,
++                                     "img_start": text_seq_len, "layer_index": None}
+
+     for i, block in enumerate(self.transformer_blocks):
++        if "_opro_ctx" in model_config:
++            model_config["_opro_ctx"]["layer_index"] = i
+         hidden_states = block(...)
+
+
+--- a/src/models/block.py
++++ b/src/models/block.py
+@@ -75,6 +75,21 @@ def attn_forward(self, query, key, value, ..., model_config=None):
+     query, key = apply_rope(query, key, image_rotary_emb)
++
++    # ---- OPRO ------------------------------------------------------------
++    ctx = (model_config or {}).get("_opro_ctx")
++    if ctx is not None and ctx.get("manager") is not None:
++        manager = ctx["manager"]
++        layer_idx = ctx.get("layer_index", 0)
++        panel_ids = ctx.get("img_panel_ids")
++        img_start = ctx.get("img_start", 0)
++        img_end = img_start + panel_ids.shape[1]
++        if panel_ids is not None and img_end <= query.shape[2]:
++            q_img, k_img = manager[layer_idx].apply_to_qk(
++                query[:, :, img_start:img_end, :],
++                key[:, :, img_start:img_end, :], panel_ids,
++            )
++            query = query.clone(); key = key.clone()
++            query[:, :, img_start:img_end, :] = q_img
++            key[:, :, img_start:img_end, :] = k_img
++    # ---------------------------------------------------------------------
+
+     hidden_states = scaled_dot_product_attention(query, key, value, ...)

@@ -1,0 +1,22 @@
+# Reference config for plain FluxFill + LoRA + OPRO on DreamBooth (3-panel).
+# Mirrors the supplementary protocol (Sec. A) at the controllable knobs only.
+
+# Required at runtime — leave commented and pass via CLI.
+# flux_path: /path/to/FLUX.1-Fill-dev
+# data_root: /path/to/dreambooth
+
+output_dir: ./output/db_opro
+panel_size: 512
+
+# Optimization
+batch_size: 1
+grad_accum: 4
+max_steps: 2000
+lr: 1.0e-4
+
+# Adapters
+lora_rank: 16
+opro_rank: 32
+opro_variant: opro    # one of: opro, opro_bd, abl1, abl2
+
+save_interval: 500

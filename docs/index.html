@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OPRO: Orthogonal Panel-Relative Operators (CVPR 2026)</title>
+<meta name="description"
+      content="OPRO is a parameter-efficient adaptation method for panel-aware in-context image generation with diffusion transformers." />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<header class="hero">
+  <div class="container">
+    <p class="venue">CVPR 2026</p>
+    <h1>OPRO: Orthogonal Panel-Relative Operators<br/>
+        <span class="subtitle">for Panel-Aware In-Context Image Generation</span></h1>
+    <p class="authors">
+      Sanghyeon Lee &middot;
+      Minwoo Lee &middot;
+      Euijin Shin &middot;
+      Kangyeol Kim &middot;
+      Seunghwan Choi &middot;
+      Jaegul Choo
+    </p>
+    <p class="affiliation">Korea Advanced Institute of Science and Technology (KAIST)</p>
+
+    <nav class="badges">
+      <a href="https://arxiv.org/abs/2603.27637" class="badge">arXiv</a>
+      <a href="https://arxiv.org/pdf/2603.27637" class="badge">PDF</a>
+      <a href="https://github.com/" class="badge">Code</a>
+      <a href="#bibtex" class="badge">BibTeX</a>
+    </nav>
+  </div>
+</header>
+
+<section class="container">
+  <h2>TL;DR</h2>
+  <p class="lead">
+    OPRO attaches a learnable, panel-specific <strong>orthogonal</strong>
+    operator on top of any backbone&rsquo;s frozen position-aware queries
+    and keys. It exactly preserves <em>same-panel attention</em> and
+    <em>feature norms</em>, and concentrates all of its capacity on
+    inter-panel modulation. With only <strong>+0.93 M</strong> parameters,
+    it improves four state-of-the-art ICG pipelines and four positional
+    encodings (APE, RoPE, LieRE, ComRoPE) on a controlled benchmark.
+  </p>
+</section>
+
+<section class="container">
+  <h2>Method</h2>
+  <p>
+    For each panel <em>p</em> we learn a low-rank skew-symmetric
+    generator <em>A<sub>p</sub> = L<sub>p</sub>R<sub>p</sub><sup>T</sup>
+    &minus; R<sub>p</sub>L<sub>p</sub><sup>T</sup></em> and exponentiate
+    it to get <em>U<sub>p</sub> = exp(A<sub>p</sub>) &isin; SO(d<sub>h</sub>)</em>.
+    Each token&rsquo;s position-aware query/key is multiplied by
+    <em>U<sub>p(token)</sub></em>. Two structural guarantees follow
+    immediately:
+  </p>
+  <ul>
+    <li><strong>Isometry</strong> &mdash; <em>U<sub>p</sub></em> is orthogonal,
+        so <em>&Vert;U<sub>p</sub>q&Vert; = &Vert;q&Vert;</em> and the attention
+        logits are not unintentionally rescaled.</li>
+    <li><strong>Same-Panel Invariance</strong> &mdash; for two tokens in the
+        same panel, the relative operator
+        <em>U<sub>p(i)</sub><sup>T</sup>U<sub>p(j)</sub> = I</em>, so the
+        attention score is byte-identical to the pre-trained backbone.</li>
+  </ul>
+  <p>
+    Because <em>L<sub>p</sub> = 0</em> and <em>R<sub>p</sub> &sim; N(0, &sigma;<sup>2</sup>)</em>
+    at initialization, the operator starts as the identity map. Optimization
+    still receives a non-degenerate gradient through <em>L<sub>p</sub></em>,
+    so training begins immediately without disturbing the backbone&rsquo;s
+    intra-panel synthesis.
+  </p>
+</section>
+
+<section class="container">
+  <h2>Controlled benchmark (Tab. 1)</h2>
+  <p>
+    A two-stage compositional reasoning task isolates how well an
+    adapter learns inter-panel rules while preserving intra-panel
+    perception. OPRO adds 8.4&percnt; more parameters than LoRA and improves
+    accuracy across all four positional encodings, with the largest gain
+    of <strong>+18.0&percnt;</strong> on ComRoPE at 4&times;4.
+  </p>
+
+  <table class="results">
+    <thead>
+      <tr><th>PE</th><th>Grid</th><th>LoRA</th><th>+ OPRO</th><th>&Delta;</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>APE</td><td>4&times;4</td><td>19.5</td><td>24.2</td><td class="pos">+4.7</td></tr>
+      <tr><td>RoPE</td><td>4&times;4</td><td>30.3</td><td>39.2</td><td class="pos">+8.9</td></tr>
+      <tr><td>LieRE</td><td>3&times;3</td><td>34.2</td><td>42.7</td><td class="pos">+8.5</td></tr>
+      <tr><td>ComRoPE</td><td>4&times;4</td><td>29.2</td><td>47.2</td><td class="pos">+18.0</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="container">
+  <h2>Instructional editing on MagicBrush (Tab. 3)</h2>
+  <p>
+    OPRO consistently improves four state-of-the-art baselines on
+    instruction-guided image editing while adding only +0.93&nbsp;M parameters
+    (4.16&percnt; of ICEdit, 0.20&percnt; of UNO).
+  </p>
+
+  <table class="results">
+    <thead>
+      <tr><th>Method</th><th>L1 &darr;</th><th>CLIP-I &uarr;</th><th>DINO &uarr;</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>ACE++</td><td>0.1215</td><td>0.8658</td><td>0.7394</td></tr>
+      <tr class="ours"><td>+ OPRO</td><td>0.1114</td><td>0.8749</td><td>0.7767</td></tr>
+      <tr><td>InsertAnything</td><td>0.1327</td><td>0.8722</td><td>0.7917</td></tr>
+      <tr class="ours"><td>+ OPRO</td><td>0.1269</td><td>0.8735</td><td>0.8009</td></tr>
+      <tr><td>ICEdit</td><td>0.1189</td><td>0.8703</td><td>0.7706</td></tr>
+      <tr class="ours"><td>+ OPRO</td><td><strong>0.0781</strong></td><td><strong>0.9002</strong></td><td><strong>0.8531</strong></td></tr>
+      <tr><td>UNO</td><td>0.0575</td><td>0.9236</td><td>0.8961</td></tr>
+      <tr class="ours"><td>+ OPRO</td><td><strong>0.0387</strong></td><td><strong>0.9281</strong></td><td><strong>0.8980</strong></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="container">
+  <h2>Subject-driven generation (Supp. Tab. 1)</h2>
+  <p>
+    On a 3-panel layout (two reference panels + one masked target),
+    OPRO improves DINO and CLIP-I scores while preserving the subject&rsquo;s
+    identity better than LoRA-only fine-tuning.
+  </p>
+
+  <table class="results">
+    <thead>
+      <tr><th>Method</th><th>DINO &uarr;</th><th>CLIP-I &uarr;</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>ICEdit (LoRA-only)</td><td>0.5828</td><td>0.7376</td></tr>
+      <tr class="ours"><td>+ OPRO</td><td><strong>0.6192</strong></td><td><strong>0.7724</strong></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="container">
+  <h2>Repository layout</h2>
+  <pre class="layout">
+opro/                       Standalone OPRO module (drop into any attention block)
+compositional_reasoning/    Sec. 4.1 controlled benchmark (4 PE x 5 adapter variants)
+dreambooth_fluxfill/        Track A: plain FluxFill + LoRA + OPRO reference impl
+instructional_editing/      Track B: ICEdit wrapper + joint training script
+integrations/               Patches for ACE++, InsertAnything, UNO
+docs/                       This project page
+SMOKE_TEST.md               End-to-end FluxFill validation (with quantitative results)
+  </pre>
+</section>
+
+<section class="container" id="bibtex">
+  <h2>BibTeX</h2>
+<pre class="bibtex">
+@inproceedings{lee2026opro,
+  title     = {OPRO: Orthogonal Panel-Relative Operators
+               for Panel-Aware In-Context Image Generation},
+  author    = {Lee, Sanghyeon and Lee, Minwoo and Shin, Euijin and
+               Kim, Kangyeol and Choi, Seunghwan and Choo, Jaegul},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision
+               and Pattern Recognition (CVPR)},
+  year      = {2026},
+}
+</pre>
+</section>
+
+<section class="container">
+  <h2>Acknowledgments</h2>
+  <p>
+    This work was supported by IITP grants funded by the Korean government
+    (MSIT) under No. RS-2019-II190075 (AI Graduate School Program at
+    KAIST) and the National Research Foundation of Korea
+    (No. RS-2025-00555621), and by i-Scream Media. Compute was provided
+    by the High-Performance Computing Support Project (NIPA grant
+    No. RQT-25-070278, 40&times; H100 GPUs).
+  </p>
+</section>
+
+<footer class="container">
+  <p>
+    Source for this page lives at
+    <code>docs/index.html</code> in the repository. Template inspired
+    by Nerfies. &copy; 2026 KAIST OPRO authors.
+  </p>
+</footer>
+
+<script src="js/main.js"></script>
+</body>
+</html>
