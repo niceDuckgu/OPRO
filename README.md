@@ -1,11 +1,19 @@
 # OPRO &mdash; Orthogonal Panel-Relative Operators (CVPR 2026)
 
+[![Conference](https://img.shields.io/badge/CVPR-2026-1d3a73)](https://arxiv.org/abs/2603.27637)
+[![arXiv](https://img.shields.io/badge/arXiv-2603.27637-b31b1b)](https://arxiv.org/abs/2603.27637)
+[![License](https://img.shields.io/badge/License-Apache_2.0-2a4d8f)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)](pyproject.toml)
+[![Project page](https://img.shields.io/badge/Project%20Page-TBD-lightgrey)](#)
+
 > **OPRO: Orthogonal Panel-Relative Operators for Panel-Aware In-Context Image Generation**
 >
 > Sanghyeon Lee, Minwoo Lee, Euijin Shin, Kangyeol Kim, Seunghwan Choi, Jaegul Choo
 > Korea Advanced Institute of Science and Technology (KAIST)
 >
-> [arXiv](https://arxiv.org/abs/2603.27637) &middot; [Project page](docs/index.html) &middot; [BibTeX](#bibtex)
+> [arXiv](https://arxiv.org/abs/2603.27637) &middot; Project page (TBD) &middot; [BibTeX](#bibtex)
+
+![OPRO overview](docs/static/figures/fig2_opro_overview.png)
 
 OPRO is a **+0.93 M parameter** adapter that attaches a learnable,
 panel-specific orthogonal operator on top of any backbone&apos;s frozen
@@ -13,6 +21,19 @@ position-aware queries and keys. It exactly preserves the same-panel
 attention scores of the backbone (Proposition 2) and feature norms
 (Proposition 1), so it concentrates all of its capacity on inter-panel
 modulation.
+
+## Why panel-relative?
+
+![Panelized attention](docs/static/figures/fig1_panelized_attention.png)
+
+Tiled in-context generation pipelines come in two flavours: a single
+*global-canvas* coordinate grid (inpainting DiTs), or *per-panel* local
+frames fused through attention (T2I DiTs). Both stay panel-agnostic at the
+attention level &mdash; the adapter has to simultaneously learn inter-panel
+transfer **and** preserve intra-panel synthesis. OPRO decouples the two:
+panel-specific orthogonal rotations modulate the off-diagonal blocks of
+attention while leaving the diagonal blocks bit-identical to the
+pre-trained backbone.
 
 The release contains four self-contained tracks:
 
@@ -70,6 +91,12 @@ A minimal training template that doesn&apos;t depend on ICEdit / ACE++.
 Use this as a starting point when integrating OPRO into your own
 pipeline.
 
+![DreamBooth subject-driven generation, ICEdit + LoRA vs ICEdit + LoRA + OPRO](docs/static/figures/supp_fig1_dreambooth.png)
+
+> Supp. Fig. 1: 3-panel DreamBooth — two reference panels + one masked
+> target. OPRO recovers subject identity (ear shape, fur pattern) more
+> faithfully under cross-panel transfer.
+
 ```bash
 python -m dreambooth_fluxfill.train \
     --config dreambooth_fluxfill/config.yaml \
@@ -80,6 +107,12 @@ python -m dreambooth_fluxfill.train \
 ---
 
 ## Track B &mdash; Instructional editing on ICEdit
+
+![MagicBrush qualitative comparison — ACE++, InsertAnything, ICEdit each + OPRO](docs/static/figures/fig5_magicbrush_qualitative.png)
+
+> Fig. 5: Adding OPRO consistently sharpens the edit, removes context
+> leakage (red boxes), and improves identity preservation across three
+> different inpainting-based ICG baselines.
 
 We do **not** vendor ICEdit. Clone it, then use our wrapper:
 
@@ -101,6 +134,13 @@ they were trained jointly. See [`instructional_editing/README.md`](instructional
 ---
 
 ## Track C &mdash; Two-stage controlled benchmark
+
+![Two-stage compositional reasoning task](docs/static/figures/fig3_two_stage_reasoning.png)
+
+> Fig. 3: Synthetic Raven-style benchmark to study OPRO in isolation.
+> Stage 1 trains intra-panel arrow perception; Stage 2 freezes the
+> backbone and asks the adapter to learn an inter-panel rule (rotation
+> by `k·45°` or vertical mirror) from the first `n−1` panels per row.
 
 ```bash
 # Stage 1 (single-panel pretext, 50k steps)

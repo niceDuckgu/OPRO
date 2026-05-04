@@ -104,6 +104,33 @@ h2 {
   border-radius: 6px;
 }
 
+/* ---------------- Figures ---------------- */
+.teaser {
+  padding-top: 6px;
+}
+figure {
+  margin: 18px 0 12px;
+  text-align: center;
+}
+figure img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+figcaption {
+  font-size: 0.92rem;
+  color: var(--muted);
+  margin-top: 10px;
+  line-height: 1.5;
+  text-align: left;
+  padding: 0 6px;
+}
+figcaption strong {
+  color: var(--fg);
+}
+
 /* ---------------- Tables ---------------- */
 .results {
   width: 100%;

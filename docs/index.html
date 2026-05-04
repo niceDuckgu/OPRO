@@ -34,6 +34,21 @@
   </div>
 </header>
 
+<section class="container teaser">
+  <figure>
+    <img src="static/figures/fig2_opro_overview.png" alt="OPRO overview"/>
+    <figcaption>
+      <strong>Fig. 2.</strong> Overview of OPRO. We partition a tiled canvas
+      into <em>P</em> panels and process them as a single token sequence.
+      Inside every attention layer, OPRO modulates the position-aware
+      queries and keys via panel-specific orthogonal operators
+      <em>U<sub>p(i)</sub></em>, <em>U<sub>p(j)</sub></em> &mdash;
+      explicitly guiding cross-panel interactions while preserving the
+      original same-panel attention geometry.
+    </figcaption>
+  </figure>
+</section>
+
 <section class="container">
   <h2>TL;DR</h2>
   <p class="lead">
@@ -48,7 +63,23 @@
 </section>
 
 <section class="container">
-  <h2>Method</h2>
+  <h2>Why panel-relative?</h2>
+  <figure>
+    <img src="static/figures/fig1_panelized_attention.png" alt="Two positional regimes in tiled ICG"/>
+    <figcaption>
+      <strong>Fig. 1.</strong> Two positional regimes in tiled ICG and the
+      role of OPRO. (a) Global-canvas encoding (inpainting DiTs) treats the
+      tiled layout as a single image on one global coordinate grid.
+      (b) Per-panel encoding (T2I DiTs) encodes each panel in its own local
+      frame and fuses through attention. Both stay panel-agnostic at the
+      attention level. (c) OPRO preserves the diagonal (intra-panel)
+      blocks while modulating the off-diagonal (inter-panel) blocks.
+    </figcaption>
+  </figure>
+</section>
+
+<section class="container">
+  <h2>Method &mdash; the math</h2>
   <p>
     For each panel <em>p</em> we learn a low-rank skew-symmetric
     generator <em>A<sub>p</sub> = L<sub>p</sub>R<sub>p</sub><sup>T</sup>
@@ -68,22 +99,32 @@
         attention score is byte-identical to the pre-trained backbone.</li>
   </ul>
   <p>
-    Because <em>L<sub>p</sub> = 0</em> and <em>R<sub>p</sub> &sim; N(0, &sigma;<sup>2</sup>)</em>
-    at initialization, the operator starts as the identity map. Optimization
-    still receives a non-degenerate gradient through <em>L<sub>p</sub></em>,
-    so training begins immediately without disturbing the backbone&rsquo;s
-    intra-panel synthesis.
+    Zero-interference initialization (<em>R<sub>p</sub> = 0</em>) ensures
+    OPRO starts as exact identity. Optimization still receives a
+    non-degenerate gradient through <em>L<sub>p</sub></em>, so training
+    begins immediately without disturbing the backbone&rsquo;s intra-panel
+    synthesis. We verified this end-to-end inside the diffusers FluxFill
+    pipeline &mdash; see <code>SMOKE_TEST.md</code>.
   </p>
 </section>
 
 <section class="container">
   <h2>Controlled benchmark (Tab. 1)</h2>
+  <figure>
+    <img src="static/figures/fig3_two_stage_reasoning.png" alt="Two-stage compositional reasoning task"/>
+    <figcaption>
+      <strong>Fig. 3.</strong> Two-stage compositional reasoning. Stage&nbsp;1
+      pretrains intra-panel perception (8-way arrow orientation sum with
+      distractors). Stage&nbsp;2 freezes the backbone and asks the adapter to
+      infer a row-wise rule (rotation by <em>k&middot;45°</em> or vertical
+      mirror) from <em>n&minus;1</em> context panels and apply it to a held-out
+      query panel.
+    </figcaption>
+  </figure>
   <p>
-    A two-stage compositional reasoning task isolates how well an
-    adapter learns inter-panel rules while preserving intra-panel
-    perception. OPRO adds 8.4&percnt; more parameters than LoRA and improves
-    accuracy across all four positional encodings, with the largest gain
-    of <strong>+18.0&percnt;</strong> on ComRoPE at 4&times;4.
+    OPRO adds 8.4&percnt; more parameters than LoRA and improves accuracy across
+    all four positional encodings, with the largest gain of
+    <strong>+18.0&percnt;</strong> on ComRoPE at 4&times;4.
   </p>
 
   <table class="results">
@@ -101,6 +142,22 @@
 
 <section class="container">
   <h2>Instructional editing on MagicBrush (Tab. 3)</h2>
+  <figure>
+    <img src="static/figures/fig5_magicbrush_qualitative.png" alt="MagicBrush qualitative comparison: 3 baselines + OPRO"/>
+    <figcaption>
+      <strong>Fig. 5.</strong> Three inpainting-based ICG baselines (ACE++,
+      InsertAnything, ICEdit) all evaluated on the MagicBrush test set with
+      and without OPRO. Red dotted boxes mark regions where the baselines
+      leak context from the input image; OPRO closes those gaps.
+    </figcaption>
+  </figure>
+  <figure>
+    <img src="static/figures/fig6_uno_qualitative.png" alt="UNO comparison with OPRO"/>
+    <figcaption>
+      <strong>Fig. 6.</strong> The same panel-relative modulation also
+      improves the T2I-based UNO pipeline.
+    </figcaption>
+  </figure>
   <p>
     OPRO consistently improves four state-of-the-art baselines on
     instruction-guided image editing while adding only +0.93&nbsp;M parameters
@@ -126,6 +183,15 @@
 
 <section class="container">
   <h2>Subject-driven generation (Supp. Tab. 1)</h2>
+  <figure>
+    <img src="static/figures/supp_fig1_dreambooth.png" alt="DreamBooth subject-driven comparison"/>
+    <figcaption>
+      <strong>Supp. Fig. 1.</strong> 3-panel DreamBooth: two reference panels
+      + one masked target. LoRA + OPRO preserves subject identity (ear shape,
+      fur pattern, accessories) more faithfully than LoRA alone when
+      transferring to a new background.
+    </figcaption>
+  </figure>
   <p>
     On a 3-panel layout (two reference panels + one masked target),
     OPRO improves DINO and CLIP-I scores while preserving the subject&rsquo;s
