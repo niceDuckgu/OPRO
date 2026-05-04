@@ -29,7 +29,7 @@ The release contains four self-contained tracks:
 ## Install
 
 ```bash
-git clone https://github.com/<org>/OPRO && cd OPRO
+git clone https://github.com/niceDuckgu/OPRO && cd OPRO
 pip install -r requirements.txt
 ```
 
