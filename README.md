@@ -160,9 +160,22 @@ accepts `opro | opro_bd | abl1 | abl2`. Combine with
 `--opro_symmetric_init` if you want the &ldquo;w/o Zero Init&rdquo;
 ablation.
 
+![Parameter efficiency on 3x3 grid reasoning](docs/static/figures/fig_param_efficiency.png)
+
+> OPRO&apos;s impact on parameter efficiency. Validation accuracy (%)
+> vs. trainable adapter parameters (M) on the 3&times;3 grid task,
+> across four positional-encoding backbones (AP / RoPE / ComRoPE /
+> LieRE) and LoRA ranks `r=2, 4, 8`.
+
 ---
 
 ## Track D &mdash; Plugging OPRO into other baselines
+
+![UNO qualitative — UNO vs. UNO + OPRO](docs/static/figures/fig6_uno_qualitative.png)
+
+> UNO baseline vs. UNO + OPRO on subject-driven editing. OPRO sharpens
+> the requested attribute change (color, logo swap) while leaving the
+> rest of the scene intact.
 
 Each subdirectory under [`integrations/`](integrations) ships a
 README, a thin `opro_processor.py`, and a `patch.diff` showing the
