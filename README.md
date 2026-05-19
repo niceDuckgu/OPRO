@@ -35,6 +35,16 @@ panel-specific orthogonal rotations modulate the off-diagonal blocks of
 attention while leaving the diagonal blocks bit-identical to the
 pre-trained backbone.
 
+![ICEdit vs ICEdit + OPRO on a diptych edit, with attention maps](docs/static/figures/fig_intro_motivation.png)
+
+> Concrete failure mode that motivates OPRO. Given a side-by-side
+> diptych (context panel C + query panel Q) and the instruction
+> *&ldquo;make the women hold a trophy instead of shaking hands&rdquo;*,
+> the ICEdit baseline leaks context geometry into the query, while
+> **+ Ours** preserves panel geometry and applies the edit. The
+> attention maps below show why: under OPRO the C&rarr;Q and
+> Q&rarr;Q blocks become cleanly separable.
+
 The release contains four self-contained tracks:
 
 | Track | What | Where |
@@ -131,6 +141,19 @@ python -m instructional_editing.wrapper \
 The HF Hub repo bundles **both** the LoRA *and* the OPRO weights because
 they were trained jointly. See [`instructional_editing/README.md`](instructional_editing/README.md).
 
+![Diverse instructional-edit categories: clothes, color, hair, text, style](docs/static/figures/supp_fig2_diverse_editing.png)
+
+> OPRO covers object replacement, attribute modification, text
+> rendering, and global style transfer while keeping the rest of
+> the original image untouched.
+
+![Multi-reference compositional generation: style from panel A + object from panel B](docs/static/figures/supp_fig3_multi_reference.png)
+
+> Multi-reference compositional generation emerges without
+> explicit training on multi-reference layouts: style is taken
+> from one context panel, the object from another, and the query
+> panel is rendered consistently.
+
 ---
 
 ## Track C &mdash; Two-stage controlled benchmark
@@ -166,6 +189,13 @@ ablation.
 > vs. trainable adapter parameters (M) on the 3&times;3 grid task,
 > across four positional-encoding backbones (AP / RoPE / ComRoPE /
 > LieRE) and LoRA ranks `r=2, 4, 8`.
+
+![Toy attention: ComRoPE vs. ComRoPE + OPRO on the 3x3 mirror rule](docs/static/figures/supp_fig_toy_attention.png)
+
+> The 3&times;3 grid attention rollout for ComRoPE collapses the
+> query cell&apos;s attention onto the wrong reference; adding
+> OPRO (&rho;=8) re-routes it to the mirror-symmetric reference
+> and yields the correct prediction (270&deg;).
 
 ---
 
