@@ -1,262 +1,352 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OPRO: Orthogonal Panel-Relative Operators (CVPR 2026)</title>
-<meta name="description"
-      content="OPRO is a parameter-efficient adaptation method for panel-aware in-context image generation with diffusion transformers." />
-<link rel="stylesheet" href="css/style.css" />
+<meta name="description" content="OPRO is a parameter-efficient adapter for panel-aware in-context image generation. Learnable orthogonal operators, one per panel, modulate attention across panels and leave attention within a panel exactly as the pre-trained diffusion transformer computes it.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="OPRO: Orthogonal Panel-Relative Operators for Panel-Aware In-Context Image Generation">
+<meta property="og:description" content="A parameter-efficient adapter that makes attention panel-aware. CVPR 2026.">
+<meta property="og:image" content="https://niceduckgu.github.io/OPRO/static/og.jpg">
+<meta property="og:url" content="https://niceduckgu.github.io/OPRO/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="citation_title" content="OPRO: Orthogonal Panel-Relative Operators for Panel-Aware In-Context Image Generation">
+<meta name="citation_author" content="Lee, Sanghyeon">
+<meta name="citation_author" content="Lee, Minwoo">
+<meta name="citation_author" content="Shin, Euijin">
+<meta name="citation_author" content="Kim, Kangyeol">
+<meta name="citation_author" content="Choi, Seunghwan">
+<meta name="citation_author" content="Choo, Jaegul">
+<meta name="citation_conference_title" content="IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)">
+<meta name="citation_publication_date" content="2026">
+<meta name="citation_pdf_url" content="https://arxiv.org/pdf/2603.27637">
+<link rel="icon" href="static/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <header class="hero">
-  <div class="container">
+  <div class="wrap">
     <p class="venue">CVPR 2026</p>
-    <h1>OPRO: Orthogonal Panel-Relative Operators<br/>
-        <span class="subtitle">for Panel-Aware In-Context Image Generation</span></h1>
+    <h1>
+      <span class="name">OPRO</span>
+      <span class="title"><span>Orthogonal Panel-Relative Operators</span> <span>for Panel-Aware In-Context Image Generation</span></span>
+    </h1>
     <p class="authors">
-      Sanghyeon Lee &middot;
-      Minwoo Lee &middot;
-      Euijin Shin &middot;
-      Kangyeol Kim &middot;
-      Seunghwan Choi &middot;
-      Jaegul Choo
+      <span>Sanghyeon Lee</span><span>Minwoo Lee</span><span>Euijin Shin</span><span>Kangyeol Kim</span><span>Seunghwan Choi</span><span>Jaegul Choo</span>
     </p>
     <p class="affiliation">Korea Advanced Institute of Science and Technology (KAIST)</p>
-
-    <nav class="badges">
-      <a href="https://arxiv.org/abs/2603.27637" class="badge">arXiv</a>
-      <a href="https://arxiv.org/pdf/2603.27637" class="badge">PDF</a>
-      <a href="https://github.com/niceDuckgu/OPRO" class="badge">Code</a>
-      <a href="#bibtex" class="badge">BibTeX</a>
+    <nav class="links" aria-label="Paper resources">
+      <a class="btn primary" href="https://openaccess.thecvf.com/content/CVPR2026/html/Lee_OPRO_Orthogonal_Panel-Relative_Operators_for_Panel-Aware_In-Context_Image_Generation_CVPR_2026_paper.html">Paper</a>
+      <a class="btn" href="https://arxiv.org/abs/2603.27637">arXiv</a>
+      <a class="btn" href="https://openaccess.thecvf.com/content/CVPR2026/supplemental/Lee_OPRO_Orthogonal_Panel-Relative_CVPR_2026_supplemental.pdf">Supplementary</a>
+      <a class="btn" href="https://github.com/niceDuckgu/OPRO">Code</a>
+      <a class="btn" href="#bibtex">BibTeX</a>
     </nav>
   </div>
 </header>
 
-<section class="container teaser">
-  <figure>
-    <img src="static/figures/fig2_opro_overview.png" alt="OPRO overview"/>
-    <figcaption>
-      <strong>Fig. 2.</strong> Overview of OPRO. We partition a tiled canvas
-      into <em>P</em> panels and process them as a single token sequence.
-      Inside every attention layer, OPRO modulates the position-aware
-      queries and keys via panel-specific orthogonal operators
-      <em>U<sub>p(i)</sub></em>, <em>U<sub>p(j)</sub></em> &mdash;
-      explicitly guiding cross-panel interactions while preserving the
-      original same-panel attention geometry.
-    </figcaption>
-  </figure>
-</section>
+<main>
 
-<section class="container">
-  <h2>TL;DR</h2>
+<section class="wrap lead-section">
   <p class="lead">
-    OPRO attaches a learnable, panel-specific <strong>orthogonal</strong>
-    operator on top of any backbone&rsquo;s frozen position-aware queries
-    and keys. It exactly preserves <em>same-panel attention</em> and
-    <em>feature norms</em>, and concentrates all of its capacity on
-    inter-panel modulation. With only <strong>+0.93 M</strong> parameters,
-    it improves four state-of-the-art ICG pipelines and four positional
-    encodings (APE, RoPE, LieRE, ComRoPE) on a controlled benchmark.
+    In-context image generation tiles reference images and a target into panels, yet attention in a
+    diffusion transformer has no signal for whether two tokens share a panel. OPRO rotates the
+    queries and keys of each panel with its own learnable orthogonal operator. Attention
+    <span class="intra">within a panel</span> stays exactly as the pre-trained backbone computes it,
+    and only attention <span class="inter">across panels</span> is adapted.
   </p>
-</section>
-
-<section class="container">
-  <h2>Why panel-relative?</h2>
-  <figure>
-    <img src="static/figures/fig1_panelized_attention.png" alt="Two positional regimes in tiled ICG"/>
+  <figure class="figure">
+    <div class="plate"><a href="static/fig1_positional_regimes.webp"><img src="static/fig1_positional_regimes.webp" width="2000" height="644" alt="Two positional regimes in tiled in-context generation and the role of OPRO in panelized attention."></a></div>
     <figcaption>
-      <strong>Fig. 1.</strong> Two positional regimes in tiled ICG and the
-      role of OPRO. (a) Global-canvas encoding (inpainting DiTs) treats the
-      tiled layout as a single image on one global coordinate grid.
-      (b) Per-panel encoding (T2I DiTs) encodes each panel in its own local
-      frame and fuses through attention. Both stay panel-agnostic at the
-      attention level. (c) OPRO preserves the diagonal (intra-panel)
-      blocks while modulating the off-diagonal (inter-panel) blocks.
+      Two positional regimes in tiled in-context generation. (a) Inpainting-based diffusion
+      transformers place all panels on one global coordinate grid. (b) Text-to-image-based methods
+      encode each panel in its own local frame and fuse the panels through attention. (c) In the
+      panelized attention matrix, diagonal blocks are intra-panel and off-diagonal blocks are
+      inter-panel. OPRO preserves the diagonal blocks and modulates the off-diagonal blocks.
     </figcaption>
   </figure>
 </section>
 
-<section class="container">
-  <h2>Method &mdash; the math</h2>
-  <p>
-    For each panel <em>p</em> we learn a low-rank skew-symmetric
-    generator <em>A<sub>p</sub> = L<sub>p</sub>R<sub>p</sub><sup>T</sup>
-    &minus; R<sub>p</sub>L<sub>p</sub><sup>T</sup></em> and exponentiate
-    it to get <em>U<sub>p</sub> = exp(A<sub>p</sub>) &isin; SO(d<sub>h</sub>)</em>.
-    Each token&rsquo;s position-aware query/key is multiplied by
-    <em>U<sub>p(token)</sub></em>. Two structural guarantees follow
-    immediately:
-  </p>
-  <ul>
-    <li><strong>Isometry</strong> &mdash; <em>U<sub>p</sub></em> is orthogonal,
-        so <em>&Vert;U<sub>p</sub>q&Vert; = &Vert;q&Vert;</em> and the attention
-        logits are not unintentionally rescaled.</li>
-    <li><strong>Same-Panel Invariance</strong> &mdash; for two tokens in the
-        same panel, the relative operator
-        <em>U<sub>p(i)</sub><sup>T</sup>U<sub>p(j)</sub> = I</em>, so the
-        attention score is byte-identical to the pre-trained backbone.</li>
-  </ul>
-  <p>
-    Zero-interference initialization (<em>R<sub>p</sub> = 0</em>) ensures
-    OPRO starts as exact identity. Optimization still receives a
-    non-degenerate gradient through <em>L<sub>p</sub></em>, so training
-    begins immediately without disturbing the backbone&rsquo;s intra-panel
-    synthesis. We verified this end-to-end inside the diffusers FluxFill
-    pipeline &mdash; see <code>SMOKE_TEST.md</code>.
+<section class="wrap" id="abstract">
+  <h2>Abstract</h2>
+  <p class="abstract">
+    We introduce a parameter-efficient adaptation method for panel-aware in-context image generation
+    with pre-trained diffusion transformers. The key idea is to compose learnable, panel-specific
+    orthogonal operators onto the backbone&rsquo;s frozen positional encodings. This design provides
+    two desirable properties: (1) <em>isometry</em>, which preserves the geometry of internal
+    features, and (2) <em>same-panel invariance</em>, which maintains the model&rsquo;s pre-trained
+    intra-panel synthesis behavior. Through controlled experiments, we demonstrate that the
+    effectiveness of our adaptation method is not tied to a specific positional encoding design but
+    generalizes across diverse positional encoding regimes. By enabling effective panel-relative
+    conditioning, the proposed method consistently improves in-context image-based instructional
+    editing pipelines, including state-of-the-art approaches.
   </p>
 </section>
 
-<section class="container">
-  <h2>Controlled benchmark (Tab. 1)</h2>
-  <figure>
-    <img src="static/figures/fig3_two_stage_reasoning.png" alt="Two-stage compositional reasoning task"/>
+<section class="wrap" id="demo">
+  <h2>The idea in one attention matrix</h2>
+  <p>
+    The widget below applies the operators to a toy sequence of four tokens per panel. Increase the
+    operator strength and compare the three matrices. With OPRO, the
+    <span class="intra">same-panel blocks</span> of the change matrix stay empty at every strength,
+    and all change is confined to the <span class="inter">cross-panel blocks</span>. The two
+    alternative designs break one or both guarantees.
+  </p>
+
+  <div class="demo" id="opro-demo">
+    <div class="demo-controls">
+      <div class="control">
+        <span class="control-label" id="variant-label">Design</span>
+        <div class="segmented" role="radiogroup" aria-labelledby="variant-label">
+          <button type="button" role="radio" aria-checked="true" data-variant="opro">OPRO</button>
+          <button type="button" role="radio" aria-checked="false" data-variant="asym">Separate Q and K operators</button>
+          <button type="button" role="radio" aria-checked="false" data-variant="bias">Additive panel bias</button>
+        </div>
+      </div>
+      <div class="control">
+        <span class="control-label" id="panels-label">Panels</span>
+        <div class="segmented" role="radiogroup" aria-labelledby="panels-label">
+          <button type="button" role="radio" aria-checked="false" data-panels="2">2</button>
+          <button type="button" role="radio" aria-checked="true" data-panels="3">3</button>
+          <button type="button" role="radio" aria-checked="false" data-panels="4">4</button>
+        </div>
+      </div>
+      <div class="control grow">
+        <label class="control-label" for="strength">Operator strength <output id="strength-out" for="strength">0.60</output></label>
+        <div class="slider-row">
+          <button type="button" class="play" id="play" aria-label="Animate the operator strength">Play</button>
+          <input type="range" id="strength" min="0" max="1" step="0.01" value="0.6">
+        </div>
+        <div class="slider-ends"><span>0, identity at initialization</span><span>1</span></div>
+      </div>
+    </div>
+
+    <div class="matrices">
+      <figure class="matrix">
+        <figcaption>Pre-trained backbone</figcaption>
+        <svg id="m-base" role="img" aria-label="Attention logits of the pre-trained backbone"></svg>
+      </figure>
+      <figure class="matrix">
+        <figcaption>After adaptation</figcaption>
+        <svg id="m-adapted" role="img" aria-label="Attention logits after adaptation"></svg>
+      </figure>
+      <figure class="matrix">
+        <figcaption>Change in logits</figcaption>
+        <svg id="m-delta" role="img" aria-label="Absolute change of the attention logits"></svg>
+      </figure>
+    </div>
+
+    <div class="legend">
+      <span class="key"><i class="swatch intra-swatch"></i>same-panel block</span>
+      <span class="key"><i class="swatch inter-swatch"></i>cross-panel block</span>
+      <span class="key scale"><i class="ramp ramp-logit"></i>logit, negative to positive</span>
+      <span class="key scale"><i class="ramp ramp-delta"></i>absolute change</span>
+    </div>
+
+    <dl class="checks" aria-live="polite">
+      <div class="check" id="check-intra">
+        <dt>Same-panel invariance</dt>
+        <dd><span class="value">0.000</span><span class="unit">largest same-panel logit change</span></dd>
+      </div>
+      <div class="check" id="check-norm">
+        <dt>Isometry</dt>
+        <dd><span class="value">0.0%</span><span class="unit">largest query or key norm change</span></dd>
+      </div>
+      <div class="check neutral" id="check-inter">
+        <dt>Cross-panel modulation</dt>
+        <dd><span class="value">0.000</span><span class="unit">largest cross-panel logit change</span></dd>
+      </div>
+    </dl>
+    <p class="demo-note">
+      Illustration with random queries, keys, and operators in eight dimensions. The operators are
+      not trained weights.
+    </p>
+  </div>
+</section>
+
+<section class="wrap" id="method">
+  <h2>Method</h2>
+  <figure class="figure">
+    <div class="plate"><a href="static/fig2_overview.webp"><img src="static/fig2_overview.webp" width="2000" height="547" loading="lazy" alt="Overview of OPRO for tiled-panel in-context image generation."></a></div>
     <figcaption>
-      <strong>Fig. 3.</strong> Two-stage compositional reasoning. Stage&nbsp;1
-      pretrains intra-panel perception (8-way arrow orientation sum with
-      distractors). Stage&nbsp;2 freezes the backbone and asks the adapter to
-      infer a row-wise rule (rotation by <em>k&middot;45°</em> or vertical
-      mirror) from <em>n&minus;1</em> context panels and apply it to a held-out
-      query panel.
+      Overview. A tiled canvas is partitioned into <em>P</em> panels and processed as one token
+      sequence. In every attention layer, OPRO modulates the position-aware queries and keys with the
+      orthogonal operators of their panels.
     </figcaption>
   </figure>
-  <p>
-    OPRO adds 8.4&percnt; more parameters than LoRA and improves accuracy across
-    all four positional encodings, with the largest gain of
-    <strong>+18.0&percnt;</strong> on ComRoPE at 4&times;4.
-  </p>
 
-  <table class="results">
-    <thead>
-      <tr><th>PE</th><th>Grid</th><th>LoRA</th><th>+ OPRO</th><th>&Delta;</th></tr>
-    </thead>
-    <tbody>
-      <tr><td>APE</td><td>4&times;4</td><td>19.5</td><td>24.2</td><td class="pos">+4.7</td></tr>
-      <tr><td>RoPE</td><td>4&times;4</td><td>30.3</td><td>39.2</td><td class="pos">+8.9</td></tr>
-      <tr><td>LieRE</td><td>3&times;3</td><td>34.2</td><td>42.7</td><td class="pos">+8.5</td></tr>
-      <tr><td>ComRoPE</td><td>4&times;4</td><td>29.2</td><td>47.2</td><td class="pos">+18.0</td></tr>
-    </tbody>
-  </table>
+  <div class="prose">
+    <p>
+      Let \(\tilde{q}_i\) and \(\tilde{k}_j\) be the queries and keys of a frozen backbone after its
+      own positional encoding, and let \(p(i)\) be the panel of token \(i\). OPRO learns one operator
+      \(U_p \in \mathrm{SO}(d_h)\) per panel and applies it to every query and key of that panel as
+    </p>
+    <div class="eq">\[ \hat{q}_i = U_{p(i)}\,\tilde{q}_i, \qquad \hat{k}_j = U_{p(j)}\,\tilde{k}_j, \]</div>
+    <p>so the attention logit becomes</p>
+    <div class="eq">\[ s'_{ij} \;=\; \frac{\tilde{q}_i^{\top}\,\bigl(U_{p(i)}^{\top} U_{p(j)}\bigr)\,\tilde{k}_j}{\sqrt{d_h}}. \]</div>
+    <p>
+      The relative operator \(U_{p(i)}^{\top}U_{p(j)}\) collapses to the identity when both tokens
+      lie in the same panel, and it is a learned rotation otherwise. The formulation only assumes
+      position-aware queries and keys, so it applies to absolute encodings and to rotary encodings
+      such as RoPE, LieRE, and ComRoPE.
+    </p>
+  </div>
+
+  <div class="cards">
+    <article class="card">
+      <h3>Isometry</h3>
+      <p class="formal">\( \lVert \hat{q}_i \rVert = \lVert \tilde{q}_i \rVert, \quad \lVert \hat{k}_j \rVert = \lVert \tilde{k}_j \rVert \)</p>
+      <p>The operators rotate features without rescaling them, which avoids unintended changes in the magnitude of attention logits.</p>
+    </article>
+    <article class="card">
+      <h3>Same-panel invariance</h3>
+      <p class="formal">\( p(i) = p(j) \;\Rightarrow\; s'_{ij} = s_{ij} \)</p>
+      <p>Attention within a panel is identical to that of the pre-trained backbone, so the adapter spends its capacity on cross-panel interaction.</p>
+    </article>
+    <article class="card">
+      <h3>Zero-interference initialization</h3>
+      <p class="formal">\( L_p = 0,\; R_p \sim \mathcal{N}(0, \sigma^2) \;\Rightarrow\; U_p = I \)</p>
+      <p>Training starts from the unmodified backbone, and the gradient with respect to \(L_p\) is non-zero from the first step.</p>
+    </article>
+  </div>
+
+  <div class="prose">
+    <p>
+      Each operator is parameterized in the Lie algebra with two low-rank factors
+      \(L_p, R_p \in \mathbb{R}^{d_h \times \rho}\) as
+    </p>
+    <div class="eq">\[ A_p = L_p R_p^{\top} - R_p L_p^{\top}, \qquad U_p = \exp(A_p), \]</div>
+    <p>
+      which is orthogonal by construction and trains with a standard optimizer. On FLUX with two
+      panels and rank \(\rho = 32\), the operators add 0.93M parameters across 57 attention
+      layers of head dimension \(d_h = 128\).
+    </p>
+  </div>
 </section>
 
-<section class="container">
-  <h2>Instructional editing on MagicBrush (Tab. 3)</h2>
-  <figure>
-    <img src="static/figures/fig5_magicbrush_qualitative.png" alt="MagicBrush qualitative comparison: 3 baselines + OPRO"/>
+<section class="wrap" id="benchmark">
+  <h2>Two-stage compositional reasoning benchmark</h2>
+  <div class="prose">
+    <p>
+      A synthetic benchmark isolates the two abilities that in-context generation requires, namely
+      perception within a panel and reasoning across panels. Stage 1 trains a ViT-B from scratch to
+      classify the sum of two arrow orientations in a single panel. Stage 2 freezes this backbone
+      and fine-tunes adapters on an \(n \times n\) grid in which every row follows a hidden rule,
+      either a rotation by a fixed multiple of 45&deg; or a mirror symmetry. The model must infer
+      the rule from the context rows and predict the missing panel.
+    </p>
+    <p>
+      The paper compares a linear probe, LoRA, and LoRA with OPRO on backbones with four positional
+      encodings (APE, RoPE, LieRE, and ComRoPE) and three grid sizes, and it ablates isometry,
+      same-panel invariance, and the initialization. The results are reported in Tables 1 and 2 of
+      the <a href="https://arxiv.org/abs/2603.27637">paper</a>. The data generator and the training
+      code are part of the <a href="https://github.com/niceDuckgu/OPRO#two-stage-compositional-reasoning-benchmark">release</a>.
+    </p>
+  </div>
+  <figure class="figure">
+    <div class="plate"><a href="static/fig3_two_stage_benchmark.webp"><img src="static/fig3_two_stage_benchmark.webp" width="2000" height="874" loading="lazy" alt="Stage 1 single-panel pretext task and Stage 2 grid reasoning task with rotation and mirror symmetry rules."></a></div>
     <figcaption>
-      <strong>Fig. 5.</strong> Three inpainting-based ICG baselines (ACE++,
-      InsertAnything, ICEdit) all evaluated on the MagicBrush test set with
-      and without OPRO. Red dotted boxes mark regions where the baselines
-      leak context from the input image; OPRO closes those gaps.
+      Stage 1 is a single-panel pretext task with distractors. In Stage 2, the upper rows of the
+      grid are complete examples of a hidden rule, which is either a rotation or a mirror symmetry,
+      and the model predicts the blank panel of the last row.
     </figcaption>
   </figure>
-  <figure>
-    <img src="static/figures/fig6_uno_qualitative.png" alt="UNO comparison with OPRO"/>
+</section>
+
+<section class="wrap" id="editing">
+  <h2>Instructional image editing</h2>
+  <div class="prose">
+    <p>
+      Instructional editing is a two-panel task with a source panel and a target panel. OPRO is
+      added with rank 32 to four in-context pipelines. ICEdit, ACE++, and InsertAnything build on
+      FLUX.1 Fill and encode both panels on a global canvas, and UNO builds on FLUX.1 and encodes
+      each panel in its own frame. All comparisons use the MagicBrush test set, and the
+      quantitative results are in Table 3 of the <a href="https://arxiv.org/abs/2603.27637">paper</a>.
+    </p>
+  </div>
+  <figure class="figure">
+    <div class="plate"><a href="static/fig5_inpainting_baselines.webp"><img src="static/fig5_inpainting_baselines.webp" width="2200" height="700" loading="lazy" alt="Edits by ACE++, InsertAnything, and ICEdit with and without OPRO on two MagicBrush examples."></a></div>
     <figcaption>
-      <strong>Fig. 6.</strong> The same panel-relative modulation also
-      improves the T2I-based UNO pipeline.
+      Comparison with inpainting-based baselines on the MagicBrush test set. Red dotted boxes mark
+      regions where a baseline does not preserve the context of the input image.
     </figcaption>
   </figure>
-  <p>
-    OPRO consistently improves four state-of-the-art baselines on
-    instruction-guided image editing while adding only +0.93&nbsp;M parameters
-    (4.16&percnt; of ICEdit, 0.20&percnt; of UNO).
-  </p>
-
-  <table class="results">
-    <thead>
-      <tr><th>Method</th><th>L1 &darr;</th><th>CLIP-I &uarr;</th><th>DINO &uarr;</th></tr>
-    </thead>
-    <tbody>
-      <tr><td>ACE++</td><td>0.1215</td><td>0.8658</td><td>0.7394</td></tr>
-      <tr class="ours"><td>+ OPRO</td><td>0.1114</td><td>0.8749</td><td>0.7767</td></tr>
-      <tr><td>InsertAnything</td><td>0.1327</td><td>0.8722</td><td>0.7917</td></tr>
-      <tr class="ours"><td>+ OPRO</td><td>0.1269</td><td>0.8735</td><td>0.8009</td></tr>
-      <tr><td>ICEdit</td><td>0.1189</td><td>0.8703</td><td>0.7706</td></tr>
-      <tr class="ours"><td>+ OPRO</td><td><strong>0.0781</strong></td><td><strong>0.9002</strong></td><td><strong>0.8531</strong></td></tr>
-      <tr><td>UNO</td><td>0.0575</td><td>0.9236</td><td>0.8961</td></tr>
-      <tr class="ours"><td>+ OPRO</td><td><strong>0.0387</strong></td><td><strong>0.9281</strong></td><td><strong>0.8980</strong></td></tr>
-    </tbody>
-  </table>
-</section>
-
-<section class="container">
-  <h2>Subject-driven generation (Supp. Tab. 1)</h2>
-  <figure>
-    <img src="static/figures/supp_fig1_dreambooth.png" alt="DreamBooth subject-driven comparison"/>
+  <figure class="figure">
+    <div class="plate"><a href="static/fig6_t2i_baseline.webp"><img src="static/fig6_t2i_baseline.webp" width="2200" height="388" loading="lazy" alt="Edits by UNO with and without OPRO on two MagicBrush examples."></a></div>
+    <figcaption>Comparison with the text-to-image-based baseline UNO on the MagicBrush test set.</figcaption>
+  </figure>
+  <figure class="figure">
+    <div class="plate"><a href="static/supp_diverse_edits.webp"><img src="static/supp_diverse_edits.webp" width="2000" height="1340" loading="lazy" alt="Edits of clothes, color, hair style, rendered text, and style on three portraits."></a></div>
     <figcaption>
-      <strong>Supp. Fig. 1.</strong> 3-panel DreamBooth: two reference panels
-      + one masked target. LoRA + OPRO preserves subject identity (ear shape,
-      fur pattern, accessories) more faithfully than LoRA alone when
-      transferring to a new background.
+      Edits produced by ICEdit with OPRO across five categories, which are clothing, color, hair
+      style, text rendering, and style transfer.
     </figcaption>
   </figure>
-  <p>
-    On a 3-panel layout (two reference panels + one masked target),
-    OPRO improves DINO and CLIP-I scores while preserving the subject&rsquo;s
-    identity better than LoRA-only fine-tuning.
-  </p>
-
-  <table class="results">
-    <thead>
-      <tr><th>Method</th><th>DINO &uarr;</th><th>CLIP-I &uarr;</th></tr>
-    </thead>
-    <tbody>
-      <tr><td>ICEdit (LoRA-only)</td><td>0.5828</td><td>0.7376</td></tr>
-      <tr class="ours"><td>+ OPRO</td><td><strong>0.6192</strong></td><td><strong>0.7724</strong></td></tr>
-    </tbody>
-  </table>
+  <figure class="figure">
+    <div class="plate"><a href="static/supp_multi_reference.webp"><img src="static/supp_multi_reference.webp" width="2000" height="1292" loading="lazy" alt="Two examples that combine a style reference and an object reference into one generated image."></a></div>
+    <figcaption>
+      Multi-reference generation with a model trained on two panels. At inference, the operator
+      learned for the reference panel is reused for both reference images.
+    </figcaption>
+  </figure>
 </section>
 
-<section class="container">
-  <h2>Repository layout</h2>
-  <pre class="layout">
-opro/                       Standalone OPRO module (drop into any attention block)
-compositional_reasoning/    Sec. 4.1 controlled benchmark (4 PE x 5 adapter variants)
-dreambooth_fluxfill/        Track A: plain FluxFill + LoRA + OPRO reference impl
-instructional_editing/      Track B: ICEdit wrapper + joint training script
-integrations/               Patches for ACE++, InsertAnything, UNO
-docs/                       This project page
-SMOKE_TEST.md               End-to-end FluxFill validation (with quantitative results)
-  </pre>
+<section class="wrap" id="code">
+  <h2>Code</h2>
+  <div class="prose">
+    <p>
+      The <a href="https://github.com/niceDuckgu/OPRO">repository</a> contains the operator module,
+      an attention processor that attaches it to FLUX transformers in diffusers, and the two-stage
+      benchmark.
+    </p>
+  </div>
+<pre class="code"><code><span class="c"># any attention layer, after its positional encoding</span>
+<span class="k">from</span> opro <span class="k">import</span> OPROLieLowRank
+
+opro = OPROLieLowRank(num_panels=<span class="n">2</span>, head_dim=<span class="n">128</span>, rank=<span class="n">32</span>)
+q, k = opro.apply_to_qk(q, k, panel_ids)   <span class="c"># q, k: [batch, heads, tokens, head_dim]</span>
+
+<span class="c"># FLUX transformers in diffusers</span>
+<span class="k">from</span> opro <span class="k">import</span> add_opro_to_flux, grid_panel_ids
+
+opro = add_opro_to_flux(pipe.transformer, num_panels=<span class="n">2</span>, rank=<span class="n">32</span>)
+opro.set_panel_ids(grid_panel_ids(<span class="n">32</span>, <span class="n">64</span>, panel_rows=<span class="n">1</span>, panel_cols=<span class="n">2</span>))</code></pre>
 </section>
 
-<section class="container" id="bibtex">
+<section class="wrap" id="bibtex">
   <h2>BibTeX</h2>
-<pre class="bibtex">
-@inproceedings{lee2026opro,
-  title     = {OPRO: Orthogonal Panel-Relative Operators
-               for Panel-Aware In-Context Image Generation},
-  author    = {Lee, Sanghyeon and Lee, Minwoo and Shin, Euijin and
-               Kim, Kangyeol and Choi, Seunghwan and Choo, Jaegul},
-  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision
-               and Pattern Recognition (CVPR)},
-  year      = {2026},
-}
-</pre>
+  <div class="bibtex">
+    <button type="button" id="copy-bibtex" class="copy">Copy</button>
+<pre><code id="bibtex-text">@InProceedings{Lee_2026_CVPR,
+    author    = {Lee, Sanghyeon and Lee, Minwoo and Shin, Euijin and Kim, Kangyeol and Choi, Seunghwan and Choo, Jaegul},
+    title     = {OPRO: Orthogonal Panel-Relative Operators for Panel-Aware In-Context Image Generation},
+    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+    month     = {June},
+    year      = {2026},
+    pages     = {9233-9242}
+}</code></pre>
+  </div>
 </section>
 
-<section class="container">
-  <h2>Acknowledgments</h2>
-  <p>
-    This work was supported by IITP grants funded by the Korean government
-    (MSIT) under No. RS-2019-II190075 (AI Graduate School Program at
-    KAIST) and the National Research Foundation of Korea
-    (No. RS-2025-00555621), and by i-Scream Media. Compute was provided
-    by the High-Performance Computing Support Project (NIPA grant
-    No. RQT-25-070278, 40&times; H100 GPUs).
-  </p>
-</section>
+</main>
 
-<footer class="container">
+<footer class="wrap footer">
   <p>
-    Source for this page lives at
-    <code>docs/index.html</code> in the repository. Template inspired
-    by Nerfies. &copy; 2026 KAIST OPRO authors.
+    This work was supported by IITP grants funded by the Korea government (MSIT)
+    (RS-2019-II190075, Artificial Intelligence Graduate School Program, KAIST), the National
+    Research Foundation of Korea (RS-2025-00555621), i-Scream Media, and the High-Performance
+    Computing Support Project of MSIT and NIPA (RQT-25-070278).
   </p>
 </footer>
 
-<script src="js/main.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<script defer src="app.js"></script>
 </body>
 </html>

@@ -1,76 +1,51 @@
-# OPRO &mdash; Orthogonal Panel-Relative Operators (CVPR 2026)
+# OPRO: Orthogonal Panel-Relative Operators
 
-[![Conference](https://img.shields.io/badge/CVPR-2026-1d3a73)](https://arxiv.org/abs/2603.27637)
+[![CVPR 2026](https://img.shields.io/badge/CVPR-2026-1b7389)](https://openaccess.thecvf.com/content/CVPR2026/html/Lee_OPRO_Orthogonal_Panel-Relative_Operators_for_Panel-Aware_In-Context_Image_Generation_CVPR_2026_paper.html)
 [![arXiv](https://img.shields.io/badge/arXiv-2603.27637-b31b1b)](https://arxiv.org/abs/2603.27637)
-[![License](https://img.shields.io/badge/License-Apache_2.0-2a4d8f)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)](pyproject.toml)
-[![Project page](https://img.shields.io/badge/Project%20Page-TBD-lightgrey)](#)
+[![Project page](https://img.shields.io/badge/Project-page-cf4f27)](https://niceduckgu.github.io/OPRO/)
+[![License](https://img.shields.io/badge/License-Apache_2.0-555555)](LICENSE)
 
-> **OPRO: Orthogonal Panel-Relative Operators for Panel-Aware In-Context Image Generation**
->
-> Sanghyeon Lee, Minwoo Lee, Euijin Shin, Kangyeol Kim, Seunghwan Choi, Jaegul Choo
-> Korea Advanced Institute of Science and Technology (KAIST)
->
-> [arXiv](https://arxiv.org/abs/2603.27637) &middot; Project page (TBD) &middot; [BibTeX](#bibtex)
+Official code for **OPRO: Orthogonal Panel-Relative Operators for Panel-Aware In-Context Image Generation** (CVPR 2026).
 
-![OPRO overview](docs/static/figures/fig2_opro_overview.png)
+Sanghyeon Lee, Minwoo Lee, Euijin Shin, Kangyeol Kim, Seunghwan Choi, Jaegul Choo<br>
+Korea Advanced Institute of Science and Technology (KAIST)
 
-OPRO is a **+0.93 M parameter** adapter that attaches a learnable,
-panel-specific orthogonal operator on top of any backbone&apos;s frozen
-position-aware queries and keys. It exactly preserves the same-panel
-attention scores of the backbone (Proposition 2) and feature norms
-(Proposition 1), so it concentrates all of its capacity on inter-panel
-modulation.
+[Paper](https://openaccess.thecvf.com/content/CVPR2026/html/Lee_OPRO_Orthogonal_Panel-Relative_Operators_for_Panel-Aware_In-Context_Image_Generation_CVPR_2026_paper.html) · [arXiv](https://arxiv.org/abs/2603.27637) · [Supplementary](https://openaccess.thecvf.com/content/CVPR2026/supplemental/Lee_OPRO_Orthogonal_Panel-Relative_CVPR_2026_supplemental.pdf) · [Project page](https://niceduckgu.github.io/OPRO/)
 
-## Why panel-relative?
+![Overview of OPRO](docs/static/fig2_overview.webp)
 
-![Panelized attention](docs/static/figures/fig1_panelized_attention.png)
+OPRO is a parameter-efficient adapter for tiled-panel in-context generation with diffusion
+transformers. It learns one orthogonal operator per panel and applies it to the position-aware
+queries and keys of that panel. The attention logit between tokens `i` and `j` then contains the
+relative operator `U_p(i)^T U_p(j)`, which gives two exact properties.
 
-Tiled in-context generation pipelines come in two flavours: a single
-*global-canvas* coordinate grid (inpainting DiTs), or *per-panel* local
-frames fused through attention (T2I DiTs). Both stay panel-agnostic at the
-attention level &mdash; the adapter has to simultaneously learn inter-panel
-transfer **and** preserve intra-panel synthesis. OPRO decouples the two:
-panel-specific orthogonal rotations modulate the off-diagonal blocks of
-attention while leaving the diagonal blocks bit-identical to the
-pre-trained backbone.
+- **Same-panel invariance.** Attention between tokens of one panel is identical to that of the pre-trained backbone.
+- **Isometry.** Query and key norms are preserved, so attention logits are not rescaled.
 
-![ICEdit vs ICEdit + OPRO on a diptych edit, with attention maps](docs/static/figures/fig_intro_motivation.png)
+The operators start as the identity, so training begins from the unmodified backbone.
 
-> Concrete failure mode that motivates OPRO. Given a side-by-side
-> diptych (context panel C + query panel Q) and the instruction
-> *&ldquo;make the women hold a trophy instead of shaking hands&rdquo;*,
-> the ICEdit baseline leaks context geometry into the query, while
-> **+ Ours** preserves panel geometry and applies the edit. The
-> attention maps below show why: under OPRO the C&rarr;Q and
-> Q&rarr;Q blocks become cleanly separable.
+## Contents
 
-The release contains four self-contained tracks:
+| Path | Description |
+|---|---|
+| [`opro/`](opro) | The operator module (`OPROLieLowRank`) and an attention processor for FLUX transformers in diffusers |
+| [`compositional_reasoning/`](compositional_reasoning) | Two-stage compositional reasoning benchmark (data generator, ViT with four positional encodings, training) |
+| [`examples/`](examples) | FLUX.1 Fill diptych editing with OPRO attached |
+| [`tests/`](tests) | Unit tests, including the two properties above and the FLUX integration |
 
-| Track | What | Where |
-|---|---|---|
-| **Module** | Standalone OPRO that drops into any attention block | [`opro/`](opro) |
-| **A. Reference** | Plain FluxFill + LoRA + OPRO on DreamBooth (3-panel) | [`dreambooth_fluxfill/`](dreambooth_fluxfill) |
-| **B. Reproduction** | ICEdit wrapper + joint LoRA+OPRO ckpt on HF | [`instructional_editing/`](instructional_editing) |
-| **C. Benchmark** | 2-stage compositional reasoning, 4 PE backbones | [`compositional_reasoning/`](compositional_reasoning) |
-| **D. Plug-ins** | Patches for ACE++, InsertAnything, UNO | [`integrations/`](integrations) |
-
----
-
-## Install
+## Installation
 
 ```bash
 git clone https://github.com/niceDuckgu/OPRO && cd OPRO
-pip install -r requirements.txt
+pip install -e .                    # operator module, requires torch >= 2.1
+pip install -e ".[benchmark]"       # adds numpy and Pillow for the benchmark
+pip install -e ".[flux]"            # adds diffusers 0.32 for the FLUX integration
 ```
 
-For the Track A / B / D scripts that touch FluxFill you also need
-`diffusers`, `peft`, and a local FLUX.1-Fill-dev checkpoint &mdash; see
-the per-track READMEs.
+## The operator module
 
----
-
-## Quick start: 5-line OPRO
+`OPROLieLowRank` works with any attention layer. Apply it to the queries and keys after the
+positional encoding of the backbone and before the attention product.
 
 ```python
 import torch
@@ -78,193 +53,118 @@ from opro import OPROLieLowRank
 
 opro = OPROLieLowRank(num_panels=2, head_dim=128, rank=32)
 
-# After your attention layer applies positional encoding to Q, K:
-q, k = ...                                            # [B, H, S, d_h]
-panel_ids = torch.cat([torch.zeros(64), torch.ones(64)]).long().unsqueeze(0)
-q_rot, k_rot = opro.apply_to_qk(q, k, panel_ids)      # same shape, same norm
+q = torch.randn(1, 24, 512, 128)                  # [batch, heads, tokens, head_dim]
+k = torch.randn(1, 24, 512, 128)
+panel_ids = torch.arange(512) // 256              # panel index of every token
+
+q_hat, k_hat = opro.apply_to_qk(q, k, panel_ids)  # same shapes, same norms
 ```
 
-`opro.OPROLieLowRank` ships four variants:
+For each panel `p`, the module holds two factors `L_p, R_p` of shape `[head_dim, rank]`, builds the
+skew-symmetric generator `A_p = L_p R_p^T - R_p L_p^T`, and applies `U_p = exp(A_p)`. With the
+default initialization (`L_p = 0`, `R_p` random), `U_p` is the identity at the first step. Tokens
+with a negative panel index, such as text tokens, are left unchanged.
 
-* `variant="opro"` &mdash; main method (Sec. 3.2); same `U` on Q and K.
-* `variant="opro_bd"` &mdash; block-diagonal RoPE-aligned (Supp. Sec. B). *(Use `OPROBlockDiagonal` directly.)*
-* `variant="abl1"` &mdash; Additive Panel Bias ablation (Tab. 2).
-* `variant="abl2"` &mdash; Asymmetric Q/K ablation (Tab. 2).
+The ablation variants of the paper are available through `variant="abl1"` (additive panel bias),
+`variant="abl2"` (separate operators for queries and keys), and `symmetric_init=True` (no
+zero-interference initialization).
 
-Plus `symmetric_init=True` for the &ldquo;OPRO w/o Zero Init&rdquo; ablation.
+## FLUX integration
 
----
+`add_opro_to_flux` attaches one operator set to every attention layer of a
+`FluxTransformer2DModel`. The operators act on the image tokens after RoPE.
 
-## Track A &mdash; Plain FluxFill + DreamBooth (3-panel)
+```python
+from diffusers import FluxFillPipeline
+from opro import add_opro_to_flux, grid_panel_ids
 
-A minimal training template that doesn&apos;t depend on ICEdit / ACE++.
-Use this as a starting point when integrating OPRO into your own
-pipeline.
+pipe = FluxFillPipeline.from_pretrained("black-forest-labs/FLUX.1-Fill-dev")
+opro = add_opro_to_flux(pipe.transformer, num_panels=2, rank=32)        # +0.93M parameters
 
-![DreamBooth subject-driven generation, ICEdit + LoRA vs ICEdit + LoRA + OPRO](docs/static/figures/supp_fig1_dreambooth.png)
+# A 512 x 1024 diptych has 32 x 64 image tokens. The left half is panel 0, the right half is panel 1.
+opro.set_panel_ids(grid_panel_ids(32, 64, panel_rows=1, panel_cols=2))
+```
 
-> Supp. Fig. 1: 3-panel DreamBooth — two reference panels + one masked
-> target. OPRO recovers subject identity (ear shape, fur pattern) more
-> faithfully under cross-panel transfer.
+`opro` is a regular `nn.Module` that stays outside the transformer and in float32. Add
+`opro.parameters()` to the optimizer next to the parameters of the adapter you train (for example
+LoRA), and store the result with `opro.save(path)`. `load_opro_for_flux(transformer, path)`
+restores it. [`examples/flux_fill_diptych.py`](examples/flux_fill_diptych.py) shows the complete
+diptych setup for instructional editing.
+
+The integration is tested with diffusers 0.32 on a small randomly initialized FLUX transformer.
+Pretrained OPRO weights are not included in this repository.
+
+## Two-stage compositional reasoning benchmark
+
+![Two-stage compositional reasoning benchmark](docs/static/fig3_two_stage_benchmark.webp)
+
+The benchmark separates perception within a panel from reasoning across panels.
+
+- **Stage 1** trains a ViT-B from scratch to classify the sum of two arrow orientations in a single panel (8 classes).
+- **Stage 2** freezes the backbone and fine-tunes on an `n x n` grid (`n` in {2, 3, 4}). All rows follow one hidden rule, either a rotation by a fixed step or a mirror symmetry, and the model predicts the orientation of the blank panel in the last row (8 classes). Grids with `n = 2` use the rotation rule only.
+
+The backbone supports four positional encodings through `--pos_type`, namely `ape`, `rope`,
+`liere`, and `comrope`. Stage 2 compares a linear probe, LoRA on the query and key projections, and
+LoRA with OPRO.
 
 ```bash
-python -m dreambooth_fluxfill.train \
-    --config dreambooth_fluxfill/config.yaml \
-    --flux_path /path/to/FLUX.1-Fill-dev \
-    --data_root /path/to/dreambooth
+# Stage 1, then linear probe / LoRA / LoRA + OPRO on 2x2, 3x3, and 4x4 grids
+bash scripts/run_benchmark.sh rope          # ape | rope | liere | comrope
+
+# Design ablations on the 3x3 grid (requires the Stage-1 checkpoint from the line above)
+bash scripts/run_ablations.sh
 ```
 
----
-
-## Track B &mdash; Instructional editing on ICEdit
-
-![MagicBrush qualitative comparison — ACE++, InsertAnything, ICEdit each + OPRO](docs/static/figures/fig5_magicbrush_qualitative.png)
-
-> Fig. 5: Adding OPRO consistently sharpens the edit, removes context
-> leakage (red boxes), and improves identity preservation across three
-> different inpainting-based ICG baselines.
-
-We do **not** vendor ICEdit. Clone it, then use our wrapper:
+Single runs use `compositional_reasoning.train` directly.
 
 ```bash
-git clone https://github.com/River-Zhang/ICEdit /your/icedit
-huggingface-cli download <ORG>/opro-icedit-magicbrush --local-dir ./ckpts/opro_icedit
+python -m compositional_reasoning.train --stage 1 --pos_type rope --output_dir output/stage1_rope
 
-python -m instructional_editing.wrapper \
-    --icedit_path /your/icedit \
-    --flux_path /path/to/FLUX.1-Fill-dev \
-    --ckpt_dir ./ckpts/opro_icedit \
-    --image source.png --instruction "Make the cat wear sunglasses" \
-    --out edited.png
+python -m compositional_reasoning.train --stage 2 --pos_type rope --grid_size 3 \
+    --pretrain_ckpt output/stage1_rope/last.pt --use_lora --use_opro \
+    --output_dir output/rope_3x3_lora_opro
 ```
 
-The HF Hub repo bundles **both** the LoRA *and* the OPRO weights because
-they were trained jointly. See [`instructional_editing/README.md`](instructional_editing/README.md).
+Each run writes `result.json` with the validation accuracy and the parameter counts, and
+`python scripts/collect_results.py output` prints a summary. To inspect the data, run
+`python -m compositional_reasoning.dataset --out samples`.
 
-![Diverse instructional-edit categories: clothes, color, hair, text, style](docs/static/figures/supp_fig2_diverse_editing.png)
+Defaults follow the supplementary material. Both stages use AdamW with batch size 256 and weight
+decay 0.05, 50k training images, and 1k validation images. Stage 1 runs 50k steps at a learning rate
+of 1e-3 with warmup and cosine decay, and Stage 2 runs 2k steps at a constant learning rate of 5e-4.
+With ViT-B on a 3x3 grid, LoRA of rank 8 has 294,912 parameters and OPRO of rank 8 adds 9,216.
 
-> OPRO covers object replacement, attribute modification, text
-> rendering, and global style transfer while keeping the rest of
-> the original image untouched.
+Every sample is generated from a per-index seed, and the validation split uses a seed range
+disjoint from the training split. This release is a cleaned-up implementation of the benchmark
+with regenerated data, so accuracies can differ from the tables of the paper.
 
-![Multi-reference compositional generation: style from panel A + object from panel B](docs/static/figures/supp_fig3_multi_reference.png)
-
-> Multi-reference compositional generation emerges without
-> explicit training on multi-reference layouts: style is taken
-> from one context panel, the object from another, and the query
-> panel is rendered consistently.
-
----
-
-## Track C &mdash; Two-stage controlled benchmark
-
-![Two-stage compositional reasoning task](docs/static/figures/fig3_two_stage_reasoning.png)
-
-> Fig. 3: Synthetic Raven-style benchmark to study OPRO in isolation.
-> Stage 1 trains intra-panel arrow perception; Stage 2 freezes the
-> backbone and asks the adapter to learn an inter-panel rule (rotation
-> by `k·45°` or vertical mirror) from the first `n−1` panels per row.
+## Tests
 
 ```bash
-# Stage 1 (single-panel pretext, 50k steps)
-python -m compositional_reasoning.train \
-    --stage 1 --pos_type rope --size base --output_dir ./out/stage1
-
-# Stage 2 (grid reasoning, freeze backbone + train LoRA + OPRO, 2k steps)
-python -m compositional_reasoning.train \
-    --stage 2 --pos_type rope --grid_size 3 \
-    --pretrain_ckpt out/stage1/best.pt \
-    --use_lora --use_opro --opro_variant opro \
-    --freeze_backbone --output_dir ./out/stage2
+pip install -e ".[test]"
+pytest
 ```
 
-`--pos_type` accepts `ape | rope | liere | comrope`. `--opro_variant`
-accepts `opro | opro_bd | abl1 | abl2`. Combine with
-`--opro_symmetric_init` if you want the &ldquo;w/o Zero Init&rdquo;
-ablation.
+## Citation
 
-![Parameter efficiency on 3x3 grid reasoning](docs/static/figures/fig_param_efficiency.png)
-
-> OPRO&apos;s impact on parameter efficiency. Validation accuracy (%)
-> vs. trainable adapter parameters (M) on the 3&times;3 grid task,
-> across four positional-encoding backbones (AP / RoPE / ComRoPE /
-> LieRE) and LoRA ranks `r=2, 4, 8`.
-
-![Toy attention: ComRoPE vs. ComRoPE + OPRO on the 3x3 mirror rule](docs/static/figures/supp_fig_toy_attention.png)
-
-> The 3&times;3 grid attention rollout for ComRoPE collapses the
-> query cell&apos;s attention onto the wrong reference; adding
-> OPRO (&rho;=8) re-routes it to the mirror-symmetric reference
-> and yields the correct prediction (270&deg;).
-
----
-
-## Track D &mdash; Plugging OPRO into other baselines
-
-![UNO qualitative — UNO vs. UNO + OPRO](docs/static/figures/fig6_uno_qualitative.png)
-
-> UNO baseline vs. UNO + OPRO on subject-driven editing. OPRO sharpens
-> the requested attribute change (color, logo swap) while leaving the
-> rest of the scene intact.
-
-Each subdirectory under [`integrations/`](integrations) ships a
-README, a thin `opro_processor.py`, and a `patch.diff` showing the
-upstream changes. The integrations are intentionally minimal &mdash; we
-do not vendor any baseline.
-
-| Baseline | Pattern |
-|---|---|
-| ACE++ | inline OPRO call inside `attention_forward` |
-| InsertAnything | OPRO context routed through `model_config["_opro_ctx"]` |
-| UNO | dual-stream `DoubleStreamBlockOproProcessor` |
-
----
-
-## Validated end-to-end on FluxFill
-
-The published code was end-to-end validated on a real FluxFill checkpoint
-before release (see [`SMOKE_TEST.md`](SMOKE_TEST.md)):
-
-* OPRO zero-init is bit-exact across all 57 attention layers in production.
-* A 1,000-step single-subject DreamBooth fine-tune improves DINO
-  similarity by **+0.076** vs. LoRA-only.
-* The released loader deserialises the paper&apos;s production checkpoint
-  unchanged.
-
-Full paper-table reproduction requires GPUs &mdash; follow the per-track
-READMEs.
-
----
+```bibtex
+@InProceedings{Lee_2026_CVPR,
+    author    = {Lee, Sanghyeon and Lee, Minwoo and Shin, Euijin and Kim, Kangyeol and Choi, Seunghwan and Choo, Jaegul},
+    title     = {OPRO: Orthogonal Panel-Relative Operators for Panel-Aware In-Context Image Generation},
+    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+    month     = {June},
+    year      = {2026},
+    pages     = {9233-9242}
+}
+```
 
 ## License
 
-[Apache-2.0](LICENSE).
-
----
+This project is released under the [Apache License 2.0](LICENSE).
 
 ## Acknowledgments
 
-This work was supported by IITP grants funded by the Korean government
-(MSIT) under No. RS-2019-II190075 (AI Graduate School Program at
-KAIST), the National Research Foundation of Korea
-(No. RS-2025-00555621), and i-Scream Media. Compute was provided by
-the High-Performance Computing Support Project (NIPA grant
-No. RQT-25-070278, 40&times; H100 GPUs).
-
----
-
-<a name="bibtex"></a>
-
-## BibTeX
-
-```bibtex
-@inproceedings{lee2026opro,
-  title     = {OPRO: Orthogonal Panel-Relative Operators
-               for Panel-Aware In-Context Image Generation},
-  author    = {Lee, Sanghyeon and Lee, Minwoo and Shin, Euijin and
-               Kim, Kangyeol and Choi, Seunghwan and Choo, Jaegul},
-  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision
-               and Pattern Recognition (CVPR)},
-  year      = {2026},
-}
-```
+This work was supported by IITP grants funded by the Korea government (MSIT) (RS-2019-II190075,
+Artificial Intelligence Graduate School Program, KAIST), the National Research Foundation of Korea
+(RS-2025-00555621), i-Scream Media, and the High-Performance Computing Support Project of MSIT and
+NIPA (RQT-25-070278).
