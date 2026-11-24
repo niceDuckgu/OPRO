@@ -195,6 +195,32 @@ section > h2, .prose, .abstract, .bibtex, .footer p { max-width: 780px; margin-i
 .card h3 { margin: 0 0 8px; font-family: var(--serif); font-size: 21px; font-weight: 600; line-height: 1.25; }
 .card p:not(.label) { margin: 0; font-size: 15.5px; line-height: 1.55; }
 
+/* ---------- Task tabs ---------- */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 780px;
+  margin-inline: auto;
+  padding: 4px;
+  background: var(--surface-2);
+  border-radius: 12px;
+}
+.tabs button {
+  flex: 1 1 auto;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 15px/1.2 var(--sans);
+  cursor: pointer;
+}
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / 0.14); }
+.tab-panel[hidden] { display: none; }
+.task-note { max-width: 780px; margin: 20px auto 0; color: var(--muted); text-align: center; }
+
 /* ---------- Result tables ---------- */
 
 .table-scroll { overflow-x: auto; margin-top: 26px; border: 1px solid var(--rule); border-radius: 14px; background: var(--surface); }

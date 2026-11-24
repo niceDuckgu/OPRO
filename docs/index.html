@@ -105,8 +105,45 @@
   </div>
 </section>
 
+<section class="wrap" id="qualitative">
+  <h2>Qualitative results</h2>
+  <div class="tabs" role="tablist" aria-label="Task">
+    <button type="button" role="tab" id="tab-editing" aria-controls="panel-editing" aria-selected="true">Instructional editing</button>
+    <button type="button" role="tab" id="tab-subject" aria-controls="panel-subject" aria-selected="false">Subject-driven generation</button>
+    <button type="button" role="tab" id="tab-multi" aria-controls="panel-multi" aria-selected="false">Multi-reference generation</button>
+  </div>
+
+  <div class="tab-panel" role="tabpanel" id="panel-editing" aria-labelledby="tab-editing">
+    <p class="task-note">The source image is the left panel, and the model generates the edited image in the right panel.</p>
+    <figure class="figure">
+      <div class="plate"><a href="static/supp_diverse_edits.webp"><img src="static/supp_diverse_edits.webp" width="2000" height="1340" loading="lazy" alt="Edits of clothes, color, hair style, rendered text, and style on three portraits."></a></div>
+      <figcaption>ICEdit with OPRO on five edit categories, namely clothing, color, hair style, text rendering, and style transfer.</figcaption>
+    </figure>
+    <figure class="figure">
+      <div class="plate"><a href="static/fig6_t2i_baseline.webp"><img src="static/fig6_t2i_baseline.webp" width="2200" height="388" loading="lazy" alt="Edits by UNO with and without OPRO on two MagicBrush examples."></a></div>
+      <figcaption>UNO with and without OPRO on MagicBrush.</figcaption>
+    </figure>
+  </div>
+
+  <div class="tab-panel" role="tabpanel" id="panel-subject" aria-labelledby="tab-subject">
+    <p class="task-note">Two reference images of a subject fill the first two panels, and the model generates the subject in a new context in the third panel.</p>
+    <figure class="figure">
+      <div class="plate"><a href="static/supp_subject_driven.webp"><img src="static/supp_subject_driven.webp" width="2200" height="603" loading="lazy" alt="A dog-face backpack generated with the Eiffel Tower and with a wheat field in the background, by LoRA and by LoRA with OPRO."></a></div>
+      <figcaption>ICEdit fine-tuned with LoRA and with LoRA and OPRO on a DreamBooth subject, shown for two prompts.</figcaption>
+    </figure>
+  </div>
+
+  <div class="tab-panel" role="tabpanel" id="panel-multi" aria-labelledby="tab-multi">
+    <p class="task-note">A model trained on two panels combines two references at inference by reusing the reference operator for both reference panels.</p>
+    <figure class="figure">
+      <div class="plate"><a href="static/supp_multi_reference.webp"><img src="static/supp_multi_reference.webp" width="2000" height="1292" loading="lazy" alt="Two examples that combine a style reference and a subject reference into one generated image."></a></div>
+      <figcaption>Each output takes the subject from one reference and the style from the other. The prompt is shown on the right.</figcaption>
+    </figure>
+  </div>
+</section>
+
 <section class="wrap" id="editing">
-  <h2>Instructional image editing</h2>
+  <h2>Quantitative results</h2>
   <div class="prose">
     <p>
       OPRO is added to four in-context pipelines and evaluated on the MagicBrush test set. ICEdit,
@@ -131,10 +168,6 @@
     </table>
   </div>
   <p class="table-caption">Quantitative results on the MagicBrush test set. OPRO uses rank 32.</p>
-  <figure class="figure">
-    <div class="plate"><a href="static/fig6_t2i_baseline.webp"><img src="static/fig6_t2i_baseline.webp" width="2200" height="388" loading="lazy" alt="Edits by UNO with and without OPRO on two MagicBrush examples."></a></div>
-    <figcaption>Comparison with the text-to-image-based baseline UNO.</figcaption>
-  </figure>
 </section>
 
 <section class="wrap" id="benchmark">
