@@ -135,8 +135,7 @@ of 1e-3 with warmup and cosine decay, and Stage 2 runs 2k steps at a constant le
 With ViT-B on a 3x3 grid, LoRA of rank 8 has 294,912 parameters and OPRO of rank 8 adds 9,216.
 
 Every sample is generated from a per-index seed, and the validation split uses a seed range
-disjoint from the training split. This release is a cleaned-up implementation of the benchmark
-with regenerated data, so accuracies can differ from the tables of the paper.
+disjoint from the training split.
 
 ## Tests
 
