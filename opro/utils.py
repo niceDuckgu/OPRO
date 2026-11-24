@@ -1,9 +1,4 @@
-"""
-OPRO Utilities
-===============
-
-Panel ID computation and config for integrating OPRO into tiled-panel layouts.
-"""
+"""Panel-index computation and configuration helpers for tiled-panel layouts."""
 
 from __future__ import annotations
 
@@ -17,6 +12,7 @@ import torch
 __all__ = [
     "OPROConfig",
     "compute_panel_ids",
+    "grid_panel_ids",
     "remap_panel_ids",
 ]
 
@@ -76,10 +72,13 @@ def compute_panel_ids(
     mask: Optional[torch.Tensor] = None,
     panel_aliases: Optional[Sequence[int]] = None,
 ) -> torch.Tensor:
-    """Compute per-token panel IDs from Flux-style positional coordinates.
+    """Compute per-token panel IDs from FLUX-style positional coordinates.
 
-    In Flux, each token has coordinates [batch_idx, row, col] stored in ``img_ids``.
-    This function bins those coordinates into a ``panel_rows x panel_cols`` grid.
+    In FLUX, ``img_ids`` stores ``[_, row, col]`` for every image token of the
+    (tiled) canvas. This function bins those coordinates into a
+    ``panel_rows x panel_cols`` grid, which is the global-canvas layout used by
+    inpainting-based pipelines. Pipelines that encode each panel in its own
+    coordinate frame should build the panel IDs directly from the token order.
 
     Args:
         ids:          Token coordinates ``[batch, seq_len, >=3]`` or ``[seq_len, >=3]``.
@@ -126,6 +125,20 @@ def compute_panel_ids(
     if squeeze_batch:
         panel_ids = panel_ids.squeeze(0)
     return remap_panel_ids(panel_ids, panel_aliases)
+
+
+def grid_panel_ids(token_rows: int, token_cols: int, panel_rows: int, panel_cols: int) -> torch.Tensor:
+    """Panel IDs for a row-major ``token_rows x token_cols`` token grid tiled into panels.
+
+    Example: a 512 x 1024 FLUX diptych has 32 x 64 image tokens, so
+    ``grid_panel_ids(32, 64, 1, 2)`` labels the left half 0 and the right half 1.
+
+    Returns:
+        Panel IDs ``[token_rows * token_cols]``.
+    """
+    rows = (torch.arange(token_rows) * panel_rows) // token_rows
+    cols = (torch.arange(token_cols) * panel_cols) // token_cols
+    return (rows[:, None] * panel_cols + cols[None, :]).flatten()
 
 
 def remap_panel_ids(

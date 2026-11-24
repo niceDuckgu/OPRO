@@ -1,2 +1,1 @@
-from .dataset import ArrowGridDataset
-from .model import ViTWithOPRO
+"""Two-stage compositional reasoning benchmark (Sec. 4.1 of the OPRO paper)."""

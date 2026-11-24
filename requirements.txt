@@ -1,17 +1,8 @@
-# --- Core ----------------------------------------------------------------
-torch>=2.4
+torch>=2.1
 numpy>=1.24
-Pillow>=10.0
-PyYAML>=6.0
+Pillow>=10.1
 
-# --- Tests ---------------------------------------------------------------
-pytest>=8.0
-
-# --- FluxFill / ICEdit / ACE++ / UNO integrations ------------------------
-# Install only when running Track A / B / D scripts that hit FluxFill.
-# diffusers>=0.30
-# peft>=0.10
-# accelerate>=0.30
-# safetensors>=0.4
-# transformers>=4.40
-# huggingface-hub>=0.24
+# FLUX integration (opro.flux, examples/) and tests:
+# diffusers==0.32.*
+# transformers
+# pytest

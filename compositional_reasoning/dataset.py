@@ -1,269 +1,459 @@
-"""
-2-Stage Compositional Reasoning Dataset (Section 4.1)
-======================================================
+"""Synthetic data for the two-stage compositional reasoning benchmark (Sec. 4.1).
 
-Stage 1 (Single-Panel Pretext):
-  - Two arrows in a single image; classify their orientation sum mod 360 (8-way).
-  - Distractors (letters) added for robustness.
+Stage 1 (single-panel pretext)
+    A 224x224 image with two arrows at random, non-overlapping positions. Each
+    arrow points in one of eight directions {0, 45, ..., 315} degrees and the label
+    is the sum of the two orientations modulo 360 (8 classes). Letters and
+    arrow-like triangles of random size are scattered as distractors.
 
-Stage 2 (Grid Reasoning):
-  - n x n grid where each row follows a latent rule.
-  - One cell per row is held out; predict the missing arrow orientation (8-way).
-  - Rules: Rotation (constant angular offset), Mirror Symmetry.
+Stage 2 (grid reasoning)
+    The image is an n x n grid (n in {2, 3, 4}) with one arrow per panel. Every
+    row is an instance of the same hidden rule; the last panel of the last row
+    is blank and the label is the orientation that belongs there (8 classes).
+
+    rotation   each panel is the previous one rotated by a fixed step k * 45 deg
+    mirror     the row is left-right symmetric (panel c equals panel n-1-c)
+
+    2x2 grids use rotation only; 3x3 and 4x4 grids draw one of the two rules
+    uniformly.
+
+Every sample is generated from ``random.Random(base_seed + index)``. The train
+and validation splits use disjoint seed ranges, so no validation image is seen
+during training.
 """
 
 from __future__ import annotations
 
-import math
 import random
 from dataclasses import dataclass
-from enum import Enum
-from typing import Optional
+from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
+from PIL import Image, ImageDraw, ImageFont
 from torch.utils.data import Dataset
-from PIL import Image, ImageDraw
-
 
 NUM_CLASSES = 8
-ANGLE_STEP = 45  # degrees
-CANVAS_SIZE = 224
-ARROW_COLORS = ["#E63946", "#457B9D", "#2A9D8F", "#E9C46A",
-                "#264653", "#F4A261", "#606C38", "#BC6C25"]
-DISTRACTOR_LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+ANGLE_STEP_DEG = 45.0
+IMAGENET_MEAN = (0.485, 0.456, 0.406)
+IMAGENET_STD = (0.229, 0.224, 0.225)
+
+# Seed offset of the validation split. Train indices stay far below this value.
+VAL_SEED_OFFSET = 1_000_000_007
+
+RULES = ("rotation", "mirror")
+DEFAULT_ROTATION_STEPS = (-2, -1, 1, 2)
+_LETTERS = "CDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
-class Rule(Enum):
-    ROTATION = "rotation"
-    MIRROR = "mirror"
+# ---------------------------------------------------------------------------
+# Drawing primitives
+# ---------------------------------------------------------------------------
 
+def draw_arrow(size: int, rotation_deg: float) -> Image.Image:
+    """Black arrow on a transparent canvas, pointing right at 0 deg (CCW positive)."""
+    canvas = max(size * 2, 80)
+    img = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    c = canvas // 2
+    head = size // 3
+    body_h = size // 4
+    draw.polygon(
+        [(c + size // 2, c), (c + size // 2 - head, c - head // 2), (c + size // 2 - head, c + head // 2)],
+        fill=(0, 0, 0),
+    )
+    draw.rectangle([c - size // 2, c - body_h // 2, c + size // 2 - head, c + body_h // 2], fill=(0, 0, 0))
+    if rotation_deg != 0:
+        img = img.rotate(rotation_deg, expand=True)
+    return img
+
+
+def _draw_triangle(size: int, rotation_deg: float) -> Image.Image:
+    """Arrow-like distractor: a plain triangle."""
+    canvas = max(size * 2, 80)
+    img = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    c = canvas // 2
+    t = size // 2
+    draw.polygon([(c + t, c), (c - t, c - t), (c - t, c + t)], fill=(0, 0, 0))
+    if rotation_deg != 0:
+        img = img.rotate(rotation_deg, expand=True)
+    return img
+
+
+def _load_font(size: int) -> ImageFont.ImageFont:
+    try:
+        return ImageFont.truetype("DejaVuSans-Bold.ttf", size)
+    except OSError:
+        try:
+            return ImageFont.load_default(size)  # Pillow >= 10.1
+        except TypeError:
+            return ImageFont.load_default()
+
+
+def _draw_letter(letter: str, size: int) -> Image.Image:
+    canvas = max(size, 40)
+    img = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    font = _load_font(size)
+    left, top, right, bottom = draw.textbbox((0, 0), letter, font=font)
+    draw.text((canvas // 2 - (right - left) // 2, canvas // 2 - (bottom - top) // 2), letter,
+              fill=(0, 0, 0), font=font)
+    return img
+
+
+def _boxes_overlap(pos_a: Tuple[int, int], size_a: int, pos_b: Tuple[int, int], size_b: int) -> bool:
+    ax, ay = pos_a
+    bx, by = pos_b
+    return not (
+        ax + size_a // 2 < bx - size_b // 2
+        or ax - size_a // 2 > bx + size_b // 2
+        or ay + size_a // 2 < by - size_b // 2
+        or ay - size_a // 2 > by + size_b // 2
+    )
+
+
+# ---------------------------------------------------------------------------
+# Stage 1: two-arrow orientation sum
+# ---------------------------------------------------------------------------
+
+def generate_stage1_sample(
+    rng: random.Random,
+    label: Optional[int] = None,
+    image_size: int = 224,
+    angle_jitter_deg: float = 0.5,
+    max_distractors: int = 8,
+) -> Tuple[Image.Image, int]:
+    """Render one pretext scene. Returns ``(image, label)`` with label in [0, 8)."""
+    if label is None:
+        label = rng.randrange(NUM_CLASSES)
+
+    scale = image_size / 224.0
+    gray = rng.randint(220, 255)
+    scene = Image.new("RGB", (image_size, image_size), (gray, gray, gray))
+
+    arrow_min = max(16, round(32 * scale))
+    arrow_max = max(arrow_min + 1, round(64 * scale))
+    margin = max(16, round(32 * scale))
+
+    num_distractors = rng.randint(0, max_distractors)
+    num_letters = rng.randint(1, min(num_distractors, 6)) if num_distractors > 0 else 0
+    num_triangles = num_distractors - num_letters
+
+    size_a = rng.randint(arrow_min, arrow_max)
+    size_b = rng.randint(arrow_min, arrow_max)
+    largest = max(size_a, size_b)
+    lo = margin + largest // 2
+    hi = image_size - margin - largest // 2
+    if lo > hi:
+        lo, hi = margin, image_size - margin
+
+    def random_pos() -> Tuple[int, int]:
+        return rng.randint(lo, hi), rng.randint(lo, hi)
+
+    # Distractor candidates are drawn first; those that collide are dropped below.
+    candidates: List[Tuple[Image.Image, Tuple[int, int]]] = []
+    for _ in range(num_letters):
+        letter = rng.choice(_LETTERS)
+        pos = random_pos()
+        letter_min = max(16, round(20 * scale))
+        letter_size = rng.randint(letter_min, max(letter_min + 1, round(40 * scale)))
+        candidates.append((_draw_letter(letter, letter_size), pos))
+    for _ in range(num_triangles):
+        pos = random_pos()
+        tri_min = max(16, round(24 * scale))
+        tri_size = rng.randint(tri_min, max(tri_min + 1, round(48 * scale)))
+        candidates.append((_draw_triangle(tri_size, rng.randrange(NUM_CLASSES) * ANGLE_STEP_DEG), pos))
+
+    # The two orientations sum to the label (mod 8).
+    idx_a = rng.randrange(NUM_CLASSES)
+    idx_b = (label - idx_a) % NUM_CLASSES
+    jitter = lambda: rng.uniform(-angle_jitter_deg, angle_jitter_deg) if angle_jitter_deg > 0 else 0.0
+    rot_a = idx_a * ANGLE_STEP_DEG + jitter()
+    rot_b = idx_b * ANGLE_STEP_DEG + jitter()
+
+    pos_a = random_pos()
+    pos_b = pos_a
+    for _ in range(100):
+        pos_b = random_pos()
+        if not _boxes_overlap(pos_b, size_b, pos_a, size_a):
+            break
+    else:
+        shift = largest + 20
+        pos_b = (min(max(pos_a[0] + shift, lo), hi), min(max(pos_a[1] + shift, lo), hi))
+
+    placed_pos = [pos_a, pos_b]
+    placed_size = [size_a, size_b]
+    objects = [(draw_arrow(size_a, rot_a), pos_a), (draw_arrow(size_b, rot_b), pos_b)]
+
+    def try_place(img: Image.Image, pos: Tuple[int, int], force: bool = False) -> bool:
+        extent = max(img.width, img.height)
+        if not force and any(_boxes_overlap(pos, extent, p, s) for p, s in zip(placed_pos, placed_size)):
+            return False
+        placed_pos.append(pos)
+        placed_size.append(extent)
+        objects.append((img, pos))
+        return True
+
+    def random_triangle() -> Tuple[Image.Image, Tuple[int, int]]:
+        tri_min = max(16, round(24 * scale))
+        tri_size = rng.randint(tri_min, max(tri_min + 1, round(48 * scale)))
+        img = _draw_triangle(tri_size, rng.randrange(NUM_CLASSES) * ANGLE_STEP_DEG)
+        half = max(img.width, img.height) // 2
+        t_lo, t_hi = margin + half, image_size - margin - half
+        if t_lo > t_hi:
+            t_lo, t_hi = margin, image_size - margin
+        return img, (rng.randint(t_lo, t_hi), rng.randint(t_lo, t_hi))
+
+    placed = sum(try_place(img, pos) for img, pos in candidates)
+    # Colliding candidates are replaced by triangles so that the scene keeps
+    # ``num_distractors`` distractors; the last ones may overlap other objects.
+    attempts = 0
+    while placed < num_distractors and attempts < max(num_distractors * 10, 20):
+        placed += try_place(*random_triangle())
+        attempts += 1
+    while placed < num_distractors:
+        placed += try_place(*random_triangle(), force=True)
+
+    rng.shuffle(objects)
+    for img, (cx, cy) in objects:
+        x = max(0, min(cx - img.width // 2, image_size - img.width))
+        y = max(0, min(cy - img.height // 2, image_size - img.height))
+        scene.paste(img, (x, y), img)
+    return scene, label
+
+
+# ---------------------------------------------------------------------------
+# Stage 2: grid reasoning
+# ---------------------------------------------------------------------------
 
 @dataclass
 class GridSample:
     image: Image.Image
-    label: int
+    label: int                               # orientation class of the blank panel
+    rule: str                                # "rotation" | "mirror"
     grid_size: int
-    blank_row: int
-    blank_col: int
-    grid_angles: list[list[Optional[int]]]
+    grid_angles: List[List[Optional[int]]]   # orientation class per panel, None = blank
 
 
-# ---------------------------------------------------------------
-# Drawing utilities
-# ---------------------------------------------------------------
-
-def draw_arrow(
-    draw: ImageDraw.ImageDraw,
-    cx: float, cy: float,
-    angle_deg: float,
-    length: float = 20.0,
-    color: str = "#E63946",
-    width: int = 3,
-) -> None:
-    rad = math.radians(angle_deg)
-    dx = math.cos(rad) * length
-    dy = -math.sin(rad) * length
-    x1, y1 = cx - dx, cy - dy
-    x2, y2 = cx + dx, cy + dy
-    draw.line([(x1, y1), (x2, y2)], fill=color, width=width)
-    head_len = length * 0.35
-    for da in [math.radians(150), math.radians(-150)]:
-        hx = x2 + math.cos(rad + da) * head_len
-        hy = y2 - math.sin(rad + da) * head_len
-        draw.line([(x2, y2), (hx, hy)], fill=color, width=width)
+def allowed_rules(n: int) -> Tuple[str, ...]:
+    """Rules available for an n x n grid (rotation only for n = 2)."""
+    return ("rotation",) if n == 2 else RULES
 
 
-def draw_distractor(draw: ImageDraw.ImageDraw, cx: float, cy: float, cell_size: float) -> None:
-    letter = random.choice(DISTRACTOR_LETTERS)
-    offset = cell_size * 0.25
-    x = cx + random.uniform(-offset, offset)
-    y = cy + random.uniform(-offset, offset)
-    draw.text((x - 4, y - 6), letter, fill="#BBBBBB")
+def _partition(total: int, parts: int) -> List[int]:
+    base, rem = divmod(total, parts)
+    return [base + (1 if i < rem else 0) for i in range(parts)]
 
 
-# ---------------------------------------------------------------
-# Grid rendering
-# ---------------------------------------------------------------
+def _render_arrow_panel(width: int, height: int, rotation_deg: float, rng: random.Random,
+                        background: Tuple[int, int, int]) -> Image.Image:
+    panel = Image.new("RGB", (width, height), background)
+    min_dim = max(24, min(width, height))
+    # Smaller panels get relatively larger arrows so they stay legible.
+    if min_dim <= 60:
+        low, high = 0.65, 0.88
+    elif min_dim <= 80:
+        low, high = 0.55, 0.78
+    else:
+        low, high = 0.45, 0.62
+    size_min = int(min_dim * low)
+    size_max = max(int(min_dim * high), size_min + 1)
+    arrow = draw_arrow(rng.randint(size_min, size_max), rotation_deg)
+    bbox = arrow.getchannel("A").getbbox()
+    if bbox is not None:
+        arrow = arrow.crop(bbox)
+
+    margin = max(int(min_dim * 0.06), 2)
+    max_w = max(width - 2 * margin, 8)
+    max_h = max(height - 2 * margin, 8)
+    if arrow.width > max_w or arrow.height > max_h:
+        s = min(max_w / arrow.width, max_h / arrow.height)
+        arrow = arrow.resize((max(8, round(arrow.width * s)), max(8, round(arrow.height * s))), Image.BICUBIC)
+
+    x = max(margin, min((width - arrow.width) // 2, width - arrow.width - margin))
+    y = max(margin, min((height - arrow.height) // 2, height - arrow.height - margin))
+    panel.paste(arrow, (x, y), arrow)
+    return panel
+
 
 def render_grid(
-    grid_angles: list[list[Optional[int]]],
-    n: int,
-    canvas_size: int = CANVAS_SIZE,
-    add_distractors: bool = False,
+    grid_angles: Sequence[Sequence[Optional[int]]],
+    rng: random.Random,
+    image_size: int = 224,
+    angle_jitter_deg: float = 0.5,
+    background: Tuple[int, int, int] = (245, 245, 245),
+    line_color: Tuple[int, int, int] = (210, 210, 210),
+    line_width: int = 2,
 ) -> Image.Image:
-    img = Image.new("RGB", (canvas_size, canvas_size), "white")
-    draw = ImageDraw.Draw(img)
-    cell = canvas_size / n
-    margin = cell * 0.1
+    rows, cols = len(grid_angles), len(grid_angles[0])
+    col_widths = _partition(image_size, cols)
+    row_heights = _partition(image_size, rows)
+    grid = Image.new("RGB", (image_size, image_size), background)
+    draw = ImageDraw.Draw(grid)
 
-    for i in range(1, n):
-        pos = int(i * cell)
-        draw.line([(pos, 0), (pos, canvas_size)], fill="#CCCCCC", width=1)
-        draw.line([(0, pos), (canvas_size, pos)], fill="#CCCCCC", width=1)
-
-    for row in range(n):
-        for col in range(n):
-            cx = col * cell + cell / 2
-            cy = row * cell + cell / 2
-            angle_idx = grid_angles[row][col]
-
-            if angle_idx is None:
-                draw.text((cx - 6, cy - 8), "?", fill="#FF0000")
+    y = 0
+    for r in range(rows):
+        x = 0
+        for c in range(cols):
+            w, h = col_widths[c], row_heights[r]
+            angle = grid_angles[r][c]
+            if angle is None:
+                panel = Image.new("RGB", (w, h), background)
+                inset = max(3, min(w, h) // 12)
+                ImageDraw.Draw(panel).rectangle([inset, inset, w - inset - 1, h - inset - 1],
+                                                outline=line_color, width=2)
             else:
-                angle_deg = angle_idx * ANGLE_STEP
-                color = ARROW_COLORS[angle_idx % len(ARROW_COLORS)]
-                arrow_len = (cell - 2 * margin) * 0.4
-                draw_arrow(draw, cx, cy, angle_deg, length=arrow_len,
-                           color=color, width=max(2, int(cell / 30)))
+                jitter = rng.uniform(-angle_jitter_deg, angle_jitter_deg) if angle_jitter_deg > 0 else 0.0
+                panel = _render_arrow_panel(w, h, angle * ANGLE_STEP_DEG + jitter, rng, background)
+            grid.paste(panel, (x, y))
+            if line_width > 0:
+                draw.rectangle([x, y, x + w - 1, y + h - 1], outline=line_color, width=line_width)
+            x += w
+        y += row_heights[r]
+    return grid
 
-            if add_distractors and random.random() < 0.3:
-                draw_distractor(draw, cx, cy, cell)
-
-    return img
-
-
-# ---------------------------------------------------------------
-# Stage 1: Single-panel pretext
-# ---------------------------------------------------------------
-
-def generate_stage1_sample(add_distractors: bool = True) -> tuple[Image.Image, int]:
-    a1 = random.randint(0, NUM_CLASSES - 1)
-    a2 = random.randint(0, NUM_CLASSES - 1)
-    label = (a1 + a2) % NUM_CLASSES
-
-    img = Image.new("RGB", (CANVAS_SIZE, CANVAS_SIZE), "white")
-    draw = ImageDraw.Draw(img)
-
-    cx1 = CANVAS_SIZE * 0.35 + random.uniform(-15, 15)
-    cy1 = CANVAS_SIZE * 0.5 + random.uniform(-15, 15)
-    cx2 = CANVAS_SIZE * 0.65 + random.uniform(-15, 15)
-    cy2 = CANVAS_SIZE * 0.5 + random.uniform(-15, 15)
-
-    draw_arrow(draw, cx1, cy1, a1 * ANGLE_STEP, length=30, color=ARROW_COLORS[a1])
-    draw_arrow(draw, cx2, cy2, a2 * ANGLE_STEP, length=30, color=ARROW_COLORS[a2])
-
-    if add_distractors:
-        for _ in range(random.randint(0, 3)):
-            dx = random.uniform(20, CANVAS_SIZE - 20)
-            dy = random.uniform(20, CANVAS_SIZE - 20)
-            draw_distractor(draw, dx, dy, 40)
-
-    return img, label
-
-
-# ---------------------------------------------------------------
-# Stage 2: Grid reasoning
-# ---------------------------------------------------------------
 
 def generate_stage2_sample(
+    rng: random.Random,
     n: int = 3,
-    allowed_rules: Optional[list[Rule]] = None,
-    add_distractors: bool = False,
+    rules: Optional[Sequence[str]] = None,
+    rotation_steps: Sequence[int] = DEFAULT_ROTATION_STEPS,
+    image_size: int = 224,
+    angle_jitter_deg: float = 0.5,
 ) -> GridSample:
-    if allowed_rules is None:
-        allowed_rules = [Rule.ROTATION] if n == 2 else list(Rule)
+    """Render one n x n reasoning grid whose rows share a hidden rule."""
+    if n not in (2, 3, 4):
+        raise ValueError("grid size n must be 2, 3 or 4")
+    options = tuple(rules) if rules is not None else allowed_rules(n)
+    for rule in options:
+        if rule not in allowed_rules(n):
+            raise ValueError(f"rule '{rule}' is not available for a {n}x{n} grid")
+    rule = rng.choice(options)
 
-    grid_angles: list[list[int]] = []
-    for row in range(n):
-        rule = random.choice(allowed_rules)
-        seed = random.randint(0, NUM_CLASSES - 1)
-        delta = random.randint(1, NUM_CLASSES - 1)
+    grid: List[List[Optional[int]]] = []
+    if rule == "rotation":
+        step = rng.choice(tuple(rotation_steps))
+        for _ in range(n):
+            start = rng.randrange(NUM_CLASSES)
+            grid.append([(start + c * step) % NUM_CLASSES for c in range(n)])
+    else:
+        for _ in range(n):
+            left = [rng.randrange(NUM_CLASSES) for _ in range(n // 2)]
+            center = [rng.randrange(NUM_CLASSES)] if n % 2 == 1 else []
+            grid.append(left + center + left[::-1])
 
-        if rule == Rule.ROTATION:
-            row_angles = [(seed + c * delta) % NUM_CLASSES for c in range(n)]
-        else:  # MIRROR
-            half = [random.randint(0, NUM_CLASSES - 1) for _ in range((n + 1) // 2)]
-            row_angles = half + half[:n // 2][::-1]
-
-        grid_angles.append(row_angles)
-
-    blank_row = random.randint(0, n - 1)
-    blank_col = random.randint(0, n - 1)
-    label = grid_angles[blank_row][blank_col]
-
-    display = [row[:] for row in grid_angles]
-    display[blank_row][blank_col] = None
-
-    image = render_grid(display, n, add_distractors=add_distractors)
-    return GridSample(
-        image=image, label=label, grid_size=n,
-        blank_row=blank_row, blank_col=blank_col, grid_angles=display,
-    )
+    label = grid[-1][-1]
+    grid[-1][-1] = None
+    image = render_grid(grid, rng, image_size=image_size, angle_jitter_deg=angle_jitter_deg)
+    return GridSample(image=image, label=int(label), rule=rule, grid_size=n, grid_angles=grid)
 
 
-# ---------------------------------------------------------------
-# Panel label computation
-# ---------------------------------------------------------------
-
-def compute_panel_labels(
-    n: int,
-    patch_size: int = 16,
-    canvas_size: int = CANVAS_SIZE,
-) -> torch.Tensor:
-    """Map each ViT patch to its grid cell index [0, n*n)."""
-    patches_per_side = canvas_size // patch_size
-    cell_patches = patches_per_side // n
-
-    labels = torch.zeros(patches_per_side, patches_per_side, dtype=torch.long)
+def compute_panel_labels(n: int, image_size: int = 224, patch_size: int = 16) -> torch.Tensor:
+    """Panel index (row-major, in [0, n*n)) of every ViT patch, shape [num_patches]."""
+    side = image_size // patch_size
+    if side * patch_size != image_size:
+        raise ValueError("image_size must be divisible by patch_size")
+    bounds = [int(round(i * side / n)) for i in range(n + 1)]
+    labels = torch.zeros(side, side, dtype=torch.long)
     for r in range(n):
         for c in range(n):
-            panel_id = r * n + c
-            labels[r * cell_patches:(r + 1) * cell_patches,
-                   c * cell_patches:(c + 1) * cell_patches] = panel_id
-
+            labels[bounds[r]:bounds[r + 1], bounds[c]:bounds[c + 1]] = r * n + c
     return labels.flatten()
 
 
-# ---------------------------------------------------------------
-# Dataset
-# ---------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Datasets
+# ---------------------------------------------------------------------------
 
-class ArrowGridDataset(Dataset):
-    """PyTorch Dataset for the 2-stage compositional reasoning benchmark.
+def _to_tensor(image: Image.Image) -> torch.Tensor:
+    x = torch.from_numpy(np.asarray(image, dtype=np.float32) / 255.0).permute(2, 0, 1)
+    mean = torch.tensor(IMAGENET_MEAN).view(3, 1, 1)
+    std = torch.tensor(IMAGENET_STD).view(3, 1, 1)
+    return (x - mean) / std
 
-    Args:
-        stage:       1 (single-panel pretext) or 2 (grid reasoning).
-        n:           Grid size for stage 2 (2, 3, or 4).
-        num_samples: Number of samples per epoch.
-        patch_size:  ViT patch size for panel label computation.
-        transform:   Optional torchvision transform for the image.
-    """
 
-    def __init__(
-        self,
-        stage: int = 2,
-        n: int = 3,
-        num_samples: int = 50_000,
-        add_distractors: bool = False,
-        patch_size: int = 16,
-        transform=None,
-    ) -> None:
-        assert stage in (1, 2)
-        self.stage = stage
-        self.n = n
-        self.num_samples = num_samples
-        self.add_distractors = add_distractors
-        self.patch_size = patch_size
-        self.transform = transform
-        self.panel_labels = compute_panel_labels(n, patch_size) if stage == 2 else None
+class _SeededDataset(Dataset):
+    def __init__(self, num_samples: int, split: str, seed: int) -> None:
+        if split not in ("train", "val"):
+            raise ValueError("split must be 'train' or 'val'")
+        if num_samples >= VAL_SEED_OFFSET:
+            raise ValueError("num_samples is too large for disjoint train/val seed ranges")
+        self.num_samples = int(num_samples)
+        self.split = split
+        self.base_seed = int(seed) + (VAL_SEED_OFFSET if split == "val" else 0)
 
     def __len__(self) -> int:
         return self.num_samples
 
-    def __getitem__(self, idx: int) -> dict:
-        if self.stage == 1:
-            img, label = generate_stage1_sample(self.add_distractors)
-        else:
-            sample = generate_stage2_sample(n=self.n, add_distractors=self.add_distractors)
-            img, label = sample.image, sample.label
+    def _rng(self, index: int) -> random.Random:
+        if not 0 <= index < self.num_samples:
+            raise IndexError(index)
+        return random.Random(self.base_seed + index)
 
-        if self.transform is not None:
-            img = self.transform(img)
-        else:
-            img = torch.tensor(np.array(img), dtype=torch.float32).permute(2, 0, 1) / 255.0
 
-        out = {"pixel_values": img, "label": label}
-        if self.panel_labels is not None:
-            out["panel_labels"] = self.panel_labels
-        return out
+class Stage1Dataset(_SeededDataset):
+    """Single-panel pretext: classify the sum of two arrow orientations."""
+
+    def __init__(self, num_samples: int = 50_000, split: str = "train", seed: int = 0,
+                 image_size: int = 224) -> None:
+        super().__init__(num_samples, split, seed)
+        self.image_size = image_size
+
+    def render(self, index: int) -> Tuple[Image.Image, int]:
+        # Training labels are balanced by index; validation labels are random.
+        label = index % NUM_CLASSES if self.split == "train" else None
+        return generate_stage1_sample(self._rng(index), label=label, image_size=self.image_size)
+
+    def __getitem__(self, index: int) -> dict:
+        image, label = self.render(index)
+        return {"pixel_values": _to_tensor(image), "label": label}
+
+
+class Stage2Dataset(_SeededDataset):
+    """Grid reasoning on an n x n grid; also returns the per-patch panel index."""
+
+    def __init__(self, n: int = 3, num_samples: int = 50_000, split: str = "train", seed: int = 0,
+                 rules: Optional[Sequence[str]] = None,
+                 rotation_steps: Sequence[int] = DEFAULT_ROTATION_STEPS,
+                 image_size: int = 224, patch_size: int = 16) -> None:
+        super().__init__(num_samples, split, seed)
+        self.n = n
+        self.rules = tuple(rules) if rules is not None else allowed_rules(n)
+        self.rotation_steps = tuple(rotation_steps)
+        self.image_size = image_size
+        self.panel_labels = compute_panel_labels(n, image_size, patch_size)
+
+    def render(self, index: int) -> GridSample:
+        return generate_stage2_sample(self._rng(index), n=self.n, rules=self.rules,
+                                      rotation_steps=self.rotation_steps, image_size=self.image_size)
+
+    def __getitem__(self, index: int) -> dict:
+        sample = self.render(index)
+        return {
+            "pixel_values": _to_tensor(sample.image),
+            "label": sample.label,
+            "panel_labels": self.panel_labels,
+        }
+
+
+if __name__ == "__main__":
+    import argparse
+    import os
+
+    parser = argparse.ArgumentParser(description="Write a few benchmark samples as PNG files.")
+    parser.add_argument("--out", default="samples")
+    parser.add_argument("--num", type=int, default=4)
+    args = parser.parse_args()
+    os.makedirs(args.out, exist_ok=True)
+
+    stage1 = Stage1Dataset(num_samples=args.num, split="val")
+    for i in range(args.num):
+        image, label = stage1.render(i)
+        image.save(os.path.join(args.out, f"stage1_{i}_sum{label * 45}.png"))
+    for n in (2, 3, 4):
+        stage2 = Stage2Dataset(n=n, num_samples=args.num, split="val")
+        for i in range(args.num):
+            sample = stage2.render(i)
+            sample.image.save(os.path.join(args.out, f"stage2_{n}x{n}_{i}_{sample.rule}_answer{sample.label * 45}.png"))
+    print(f"wrote samples to {args.out}/")

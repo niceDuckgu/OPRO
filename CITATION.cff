@@ -1,0 +1,37 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite the paper."
+title: "OPRO: Orthogonal Panel-Relative Operators for Panel-Aware In-Context Image Generation"
+authors:
+  - family-names: Lee
+    given-names: Sanghyeon
+  - family-names: Lee
+    given-names: Minwoo
+  - family-names: Shin
+    given-names: Euijin
+  - family-names: Kim
+    given-names: Kangyeol
+  - family-names: Choi
+    given-names: Seunghwan
+  - family-names: Choo
+    given-names: Jaegul
+preferred-citation:
+  type: conference-paper
+  title: "OPRO: Orthogonal Panel-Relative Operators for Panel-Aware In-Context Image Generation"
+  authors:
+    - family-names: Lee
+      given-names: Sanghyeon
+    - family-names: Lee
+      given-names: Minwoo
+    - family-names: Shin
+      given-names: Euijin
+    - family-names: Kim
+      given-names: Kangyeol
+    - family-names: Choi
+      given-names: Seunghwan
+    - family-names: Choo
+      given-names: Jaegul
+  collection-title: "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)"
+  year: 2026
+  month: 6
+  start: 9233
+  end: 9242
