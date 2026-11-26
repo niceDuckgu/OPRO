@@ -140,6 +140,8 @@ h1 { margin: 0; }
   list-style: none;
   font-weight: 500;
 }
+.authors a { color: inherit; text-decoration-color: var(--rule); text-decoration-thickness: 2px; }
+.authors a:hover { color: var(--inter); text-decoration-color: currentColor; }
 .affiliation { margin: 0; color: var(--muted); font-size: 15px; }
 .authors sup, .author-note sup { margin-left: 1px; color: var(--inter); font-size: 0.7em; line-height: 0; }
 .author-note { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; }
